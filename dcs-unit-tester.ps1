@@ -121,6 +121,7 @@ try {
 	$trackProgress = 1
 	$successCount = 0
 	$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+	$globalStopwatch =  [system.diagnostics.stopwatch]::StartNew()
 	$tracks | ForEach-Object {
 		Write-Host "`t($trackProgress/$trackCount) Running `"$([System.IO.Path]::GetRelativePath($pwd, $_.FullName))`""
 		if (-not (GetDCSRunning)){
@@ -194,10 +195,10 @@ try {
 			$result = $FALSE
 		}
 		if ($result -eq $TRUE) {
-			Write-Host "`t`t✅ Test Passed after $($stopwatch.Elapsed.ToString('c'))" -ForegroundColor Green -BackgroundColor Black
+			Write-Host "`t`t✅ Test Passed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Green -BackgroundColor Black
 			$successCount = $successCount + 1
 		} else {
-			Write-Host "`t`t❌ Test Failed after $($stopwatch.Elapsed.ToString('c'))" -ForegroundColor Red -BackgroundColor Black
+			Write-Host "`t`t❌ Test Failed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Red -BackgroundColor Black
 		}
 		if ($output) { $output.Clear() }
 
@@ -205,10 +206,11 @@ try {
 	}
 	Write-Host "Finished, passed tests: " -NoNewline
 	if ($successCount -eq $trackCount){
-		Write-Host "✅ [$successCount/$trackCount]" -F Green -B Black 
+		Write-Host "✅ [$successCount/$trackCount]" -F Green -B Black -NoNewline
 	} else {
-		Write-Host "❌ [$successCount/$trackCount]" -F Red -B Black 
+		Write-Host "❌ [$successCount/$trackCount]" -F Red -B Black -NoNewline
 	}
+	Write-Host " in $($globalStopwatch.Elapsed.ToString('hh\:mm\:ss'))";
 	if ((Get-ExecutionPolicy -Scope Process) -eq 'Bypass'){
 		Read-Host "Press enter to exit"
 	}

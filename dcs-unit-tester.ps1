@@ -127,7 +127,7 @@ try {
 		if (-not (GetDCSRunning)){
 			Overwrite "`t`t🕑 Starting DCS $(Spinner)" -F Y
 			if ($trackProgress -gt 1) { sleep 10 }
-			Start-Process -FilePath $GamePath
+			Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
 		}
 		while (-not (Ping)) {
 			Overwrite "`t`t🕑 Waiting for game response $(Spinner)" -F Y

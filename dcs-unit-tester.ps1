@@ -204,6 +204,7 @@ try {
 
 		$trackProgress = $trackProgress + 1
 	}
+	$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
 	Write-Host "Finished, passed tests: " -NoNewline
 	if ($successCount -eq $trackCount){
 		Write-Host "✅ [$successCount/$trackCount]" -F Green -B Black -NoNewline

@@ -1,17 +1,18 @@
 using namespace System.Text.Json
 param (
 	[string] $GamePath,	
-	[string] $TrackDirectory
+	[string] $TrackDirectory,
+	[switch] $QuitDcsOnFinish
 )
 $ErrorActionPreference = "Stop"
-Add-Type -Path "$pwd\DCS.Lua.Connector.dll"
+Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
 $connector.Timeout = [System.TimeSpan]::FromSeconds(0.25)
+$dutAssersionRegex = '^DUT_ASSERSION=(true|false)$'
 try {
 	if (-Not $GamePath) {
 		Write-Host "No Game Path provided, attempting to retrieve from registry" -ForegroundColor Yellow -BackgroundColor Black
-		$dcsPath = Get-ItemPropertyValue -Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World" -Name path
-		$dcsExe = Join-Path -Path $dcsPath -ChildPath "/bin/DCS.exe"
+		$dcsExe = .$PSScriptRoot/dcs-find.ps1 -GetExecutable
 		if (Test-Path -LiteralPath $dcsExe) {
 			$GamePath = $dcsExe
 			Write-Host "`tFound Game Path at $dcsExe" -ForegroundColor Green -BackgroundColor Black
@@ -165,8 +166,12 @@ try {
 			# Read data from stream and write it to host
 			while (($i = $stream.Read($bytes,0,$bytes.Length)) -ne 0){
 				$EncodedText = New-Object System.Text.ASCIIEncoding
-				$data = $EncodedText.GetString($bytes,0, $i)
-				$output.Add($data)
+				$EncodedText.GetString($bytes,0, $i).Split(';') | % {
+					if (-not $_) { return }
+					# Print output messages that aren't the assersion	
+					if (-not ($_ -match $dutAssersionRegex)) { Write-Host "`t`t📄 $_" }
+					$output.Add($_)
+				}
 				if (-Not (GetProcessRunning($dcsExe))) {
 					throw [System.TimeoutException] "❌ Track ended without sending anything"
 				}
@@ -178,14 +183,11 @@ try {
 			if ($listener) { $listener.stop() }
 			if ($stream) { $stream.close() }
 		}
-		# Attempt to find the unit test assersion output line, print out all other lines
-		$regexString = '^DUT_ASSERSION=(true|false)$'
+		# Attempt to find the unit test assersion output line
 		$output | ForEach-Object {
-			if ($_ -match $regexString){
+			if ($_ -match $dutAssersionRegex){
 				$result = [System.Boolean]::Parse($Matches[1])
 				$resultSet = $true
-			} else {
-				Write-Host "`t`t📄 $_"
 			}
 		}
 
@@ -204,7 +206,14 @@ try {
 
 		$trackProgress = $trackProgress + 1
 	}
-	$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
+	if ($QuitDcsOnFinish){
+		sleep 2
+		try {
+			$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
+		} catch {
+			#Ignore errors
+		}
+	}
 	Write-Host "Finished, passed tests: " -NoNewline
 	if ($successCount -eq $trackCount){
 		Write-Host "✅ [$successCount/$trackCount]" -F Green -B Black -NoNewline

@@ -1,4 +1,3 @@
--- Make this code on mission end trigger
 -- If there are any undamaged units on red team
 for i, group in pairs(coalition.getGroups(1)) do
     for i, unit in pairs(group:getUnits()) do
@@ -7,7 +6,6 @@ for i, group in pairs(coalition.getGroups(1)) do
         Output("G: "..group:getName().." U: "..unit:getName()..' - life: '..life.."/"..life0)
         if life >= life0 then
             Assert(false);
-            return
         end
     end
 end

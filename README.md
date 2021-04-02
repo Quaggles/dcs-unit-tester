@@ -56,19 +56,25 @@ Alternatively you can call `Do Script File` on `Scripts/OnMissionEnd.lua` locate
 
 ## Setup
 
+0. Clone the project into a folder `git clone https://github.com/Quaggles/dcs-unit-tester.git --recurse-submodules` or download the project zip from [here](https://github.com/Quaggles/dcs-unit-tester/archive/refs/heads/master.zip)
+
 1. Configure a DCS profile for the tester
 
-Put the `Saved Games\DCS.unittest` folder in your Saved Games folder next to your `DCS` and `DCS.openbeta` folders, this is a profile with an autoexec.cfg file that will run the tests in DCS without rendering anything and in windowed mode, this allows you to keep it in the background and work on other things.
+Put the `[Project Folder]\Saved Games\DCS.unittest` folder in your Saved Games folder next to your `DCS` and `DCS.openbeta` folders, this is a profile with an autoexec.cfg file that will run the tests in DCS without rendering anything and in windowed mode, this allows you to keep it in the background and work on other things.
 
 It also contains `DCS-LuaConnector-hook.lua` from my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) system which allows the Powershell script to talk to the DCS Lua environment directly and determine if it's waiting on the menu and to tell it to load tracks.
 
 2. Get some tests
 
-I've created 81 tests for the F/A-18C Hornet which are [available here](https://github.com/Quaggles/dcs-unit-tests), it covers every weapon system available for the aircraft. It also tests where necessary every variant of every weapon when they have different racks, for example there used to be a bug where the AIM-9X on a single rail would work different than when loaded on a double rail, this avoids missing those peculiarities.
+[Follow the guide](https://github.com/Quaggles/dcs-unit-tester#how-to-create-a-test)
+
+I've also created 81 tests for the F/A-18C Hornet which are [available here](https://github.com/Quaggles/dcs-unit-tests), it covers every weapon system available for the aircraft. It also tests where necessary every variant of every weapon when they have different racks, for example there used to be a bug where the AIM-9X on a single rail would work different than when loaded on a double rail, this avoids missing those peculiarities.
 
 3. Install the DCS Unit Tester Mod in OVGME
 
-In the repository as `DCS Unit Tester Mod - Disable SSE and Briefing.zip`
+[Get OVGME from here and configure it](https://wiki.hoggitworld.com/view/OVGME)
+
+Install the mod from this repository: `DCS Unit Tester Mod - Disable SSE and Briefing.zip`
 
 This does two things, disables the safe scripting environment to allow the mission track to talk over a TCP connection to the powershell script and also mods the game to skip any briefings that would show up at the start of a track and wait for user input
 

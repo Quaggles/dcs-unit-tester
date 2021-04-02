@@ -32,7 +32,7 @@ When creating tests remove as many variables from each test as possible and make
 * Since I'm testing whether the Hornet radar works to guide the AMRAAM onto the target I make sure the target aircraft is not infront of the Hornet since if LTWS failed the missile would be fired in visual mode and might find the target without the Hornet's radar
 * To mark the target as L&S I use the undesignate button (Makes highest priority target L&S) instead of slewing to the target and pressing TDC depress, this means that if ED changes the slew rate or the scale of the radar display it won't break the test
 
-These are the types of considerations you should
+These are the types of considerations you should make when creating your tests if you want them to work across versions and be as consistent as possible which is after all the whole point of the tests. I've done some tests of CCRP bombing that break some of these rules by having the player aircraft start in active pause, I configure all systems, then escape active pause with the aircraft in an autopilot mode to fly straight, the aircraft is placed roughly 10 seconds before the CCRP release point so a minimum amount of entropy is introduced by the flight model. This has worked so far without issue but I would avoid any flight model interaction if possible.
 
 Once your test mission is ready play through it once and successfully satisfy the assersion (Shoot the red unit), save the track and then it can be loaded by the unit tester.
 

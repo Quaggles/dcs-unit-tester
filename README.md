@@ -95,6 +95,37 @@ Otherwise leave it set uncommented to save your power bill
 Once the script has finished you should see a lot of terminal output showing the results of each test like so:
 ![image](https://user-images.githubusercontent.com/8382945/113414119-932bd900-93ff-11eb-8aad-a445ad953112.png)
 
+## CreateMissionsFromTemplates.ps1
+
+Located in the `Scripts/` folder is `CreatemissionsFromTemplates.ps1` script this simplifies creating tests for lots of weapon variants. Follow the structure in https://github.com/Quaggles/dcs-unit-tests. Create your template by naming your track `.base.trk`, put file called `payloads.lua` next to it with a format like this:
+
+```lua
+payloads = {
+    ["AIM-7F Cheek"] = {
+        ["pylons"] = {
+            [6] = {["CLSID"] = "{AIM-7F}",},
+            [4] = {["CLSID"] = "{AIM-7F}",},
+        }
+    },
+    ["AIM-7M Cheek"] = {
+        ["pylons"] = {
+            [6] = {["CLSID"] = "{8D399DDA-FF81-4F14-904D-099B34FE7918}",},
+            [4] = {["CLSID"] = "{8D399DDA-FF81-4F14-904D-099B34FE7918}",},
+        }
+    },
+    ["AIM-7H Cheek"] = {
+        ["pylons"] = {
+            [6] = {["CLSID"] = "{AIM-7H}",},
+            [4] = {["CLSID"] = "{AIM-7H}",},
+        }
+    },
+}
+```
+
+The above example will result in 3 .trk files being created with the player having a different missile loaded in all of them.
+
+Run the script and it will recursively search that directly and create the variants of each .trk file: `.\CreateMissionsFromTemplates.ps1 "C:\Users\Quaggles\Git\DCS\dcs-unit-tests\FA-18C"`
+
 ## FAQ
 
 ### I have a mission script error popup

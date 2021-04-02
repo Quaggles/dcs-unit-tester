@@ -1,0 +1,3 @@
+[submodule "Scripts/dcs-lua-bin"]
+	path = Scripts/dcs-lua-bin
+	url = https://github.com/Quaggles/dcs-lua-bin.git

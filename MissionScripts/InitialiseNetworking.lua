@@ -13,12 +13,12 @@ end
 
 function Output(message)
     if socket ~= nil and dutExportSocket ~= nil then
-        socket.try(dutExportSocket:send(tostring(message)))
+        socket.try(dutExportSocket:send(tostring(message)..";"))
     end
 end
 
 function Assert(message)
     if socket ~= nil and dutExportSocket ~= nil then
-        socket.try(dutExportSocket:send("DUT_ASSERSION="..tostring(message)))
+        socket.try(dutExportSocket:send("DUT_ASSERSION="..tostring(message)..";"))
     end
 end

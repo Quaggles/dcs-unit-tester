@@ -5,6 +5,10 @@ A powershell script that handles opening DCS and automatically running through u
 
 ![image](https://user-images.githubusercontent.com/8382945/113413719-a0949380-93fe-11eb-9859-a739065cb44a.png)
 
+Overview YouTube Video:
+
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/NL5GRlY3plM/0.jpg)](http://www.youtube.com/watch?v=NL5GRlY3plM "DCS Unit Tester Overview")
+
 ## What is it?
 
 DCS is a massive game/simulation with hundreds of elements that come together to create a working aircraft, every single change could potentially break a system and doing regression testing for every system on every aircraft for every patch is a massive time investment. 

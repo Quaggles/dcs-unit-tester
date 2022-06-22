@@ -48,7 +48,7 @@ try {
 
 	function GetProcessFromPath {
 		param($Path)
-		return [System.IO.Path]::GetFileNameWithoutExtension($path)
+		return [System.IO.Path]::GetFileNameWithoutExtension($Path)
 	}
 
 	function GetProcessRunning {
@@ -151,7 +151,7 @@ try {
 			# Wait for an incoming connection, if no connection occurs 
 			$task = $listener.AcceptTcpClientAsync()
 			while (-not $task.AsyncWaitHandle.WaitOne(100)) {
-				if (-Not (GetProcessRunning($dcsExe))) {
+				if (-Not (GetDCSRunning)) {
 					throw [System.TimeoutException] "❌ Track TCP Connection"
 				}
 			}
@@ -172,7 +172,7 @@ try {
 					if (-not ($_ -match $dutAssersionRegex)) { Write-Host "`t`t📄 $_" }
 					$output.Add($_)
 				}
-				if (-Not (GetProcessRunning($dcsExe))) {
+				if (-Not (GetDCSRunning)) {
 					throw [System.TimeoutException] "❌ Track ended without sending anything"
 				}
 			}

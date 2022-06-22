@@ -2,7 +2,8 @@ using namespace System.Text.Json
 param (
 	[string] $GamePath,	
 	[string] $TrackDirectory,
-	[switch] $QuitDcsOnFinish
+	[switch] $QuitDcsOnFinish,
+	[switch] $Headless
 )
 $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
@@ -131,11 +132,15 @@ try {
 			Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
 		}
 		while (-not (Ping)) {
+			if ($Headless) { continue; }
 			Overwrite "`t`t🕑 Waiting for game response $(Spinner)" -F Y
 		}
+		sleep 1
 		while (-not (OnMenu)) {
+			if ($Headless) { continue; }
 			Overwrite "`t`t🕑 Waiting for menu $(Spinner)" -F Y
 		}
+		sleep 1
 		LoadTrack -TrackPath $_.FullName | out-null
 		Overwrite "`t`t✅ DCS Ready" -F Green
 		# $process = Get-Process (GetProcessFromPath $dcsExe)
@@ -222,7 +227,7 @@ try {
 		Write-Host "❌ [$successCount/$trackCount]" -F Red -B Black -NoNewline
 	}
 	Write-Host " in $($globalStopwatch.Elapsed.ToString('hh\:mm\:ss'))";
-	if ((Get-ExecutionPolicy -Scope Process) -eq 'Bypass'){
+	if (-not $Headless -and (Get-ExecutionPolicy -Scope Process) -eq 'Bypass'){
 		Read-Host "Press enter to exit"
 	}
 } finally {

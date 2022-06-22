@@ -176,8 +176,9 @@ try {
 					throw [System.TimeoutException] "❌ Track ended without sending anything"
 				}
 			}
-		} catch {
-			Write-Host "`t`t$($_.ToString())" -ForegroundColor Red -BackgroundColor Black
+		} catch [Exception] {
+			Write-Host "`t`tError: $($_.ToString())" -ForegroundColor Red -BackgroundColor Black
+			$_.ScriptStackTrace
 		} finally {		 
 			# Close TCP connection and stop listening
 			if ($listener) { $listener.stop() }

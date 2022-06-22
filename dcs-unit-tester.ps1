@@ -116,7 +116,7 @@ try {
 		$text = "`r$text$(' '*($Host.UI.RawUI.WindowSize.Width - $textLen))"
 		Write-Host $text -NoNewline -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
 	}
-	$tracks = Get-ChildItem -LiteralPath $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
+	$tracks = Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
 	$trackCount = ($tracks | Measure-Object).Count
 	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
 	$trackProgress = 1

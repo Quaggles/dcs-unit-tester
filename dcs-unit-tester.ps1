@@ -1,6 +1,6 @@
 using namespace System.Text.Json
 param (
-	[string] $GamePath,	
+	[string] $GamePath,
 	[string] $TrackDirectory,
 	[switch] $QuitDcsOnFinish,
 	[switch] $Headless
@@ -117,6 +117,7 @@ try {
 		$text = "`r$text$(' '*($Host.UI.RawUI.WindowSize.Width - $textLen))"
 		Write-Host $text -NoNewline -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
 	}
+	# Gets all the tracks in the track directory that do not start with a .
 	$tracks = Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
 	$trackCount = ($tracks | Measure-Object).Count
 	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
@@ -124,8 +125,57 @@ try {
 	$successCount = 0
 	$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
 	$globalStopwatch =  [system.diagnostics.stopwatch]::StartNew()
+
+	# Stack representing the subdirectory we are in, used for reporting correct nested test suites to TeamCity
+	$testSuiteStack = New-Object Collections.Generic.List[string]
+
+	# Run the tracks
 	$tracks | ForEach-Object {
-		Write-Host "`t($trackProgress/$trackCount) Running `"$([System.IO.Path]::GetRelativePath($pwd, $_.FullName))`""
+		$relativeTestPath = $([System.IO.Path]::GetRelativePath($pwd, $_.FullName))
+		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
+		$testName = $(split-path $_.FullName -leafBase)
+		if ($Headless) {
+			# Finish any test suites we were in if they aren't in the new path
+			$index = $testSuiteStack.Count - 1
+
+			$testSuiteStack | Sort-Object -Descending {(++$script:i)} | % { # <= Reverse Loop
+				if ($testSuites.Count -gt $index) {
+					$peek = $testSuites[$index]
+				} else {
+					$peek = $null
+				}
+				if ($peek -ne $_) {
+					$testSuiteStack.RemoveAt($index)
+					Write-Host "##teamcity[testSuiteFinished name='$_']"
+				}
+				$index = $index - 1
+			}
+
+			# Start suites to match the new subdirectories
+			$index = 0
+			$testSuites | % {
+				if ($testSuiteStack.Count -ge $index + 1) {
+					$peek = $testSuiteStack[$index]
+					if ($peek -ne $_) {
+						$testSuiteStack.Add($_)
+						Write-Host "##teamcity[testSuiteStarted name='$_']"
+					}
+				} else {
+					$testSuiteStack.Add($_)
+					Write-Host "##teamcity[testSuiteStarted name='$_']"
+				}
+				$index = $index + 1
+			}
+		}
+
+		# Progress report
+		if ($Headless) {
+			Write-Host "##teamcity[progressMessage '($trackProgress/$trackCount) Running `"$relativeTestPath`"']"
+		} else {
+			Write-Host "`t($trackProgress/$trackCount) Running `"$relativeTestPath`""
+		}
+
+		# Start DCS
 		if (-not (GetDCSRunning)){
 			Overwrite "`t`t🕑 Starting DCS $(Spinner)" -F Y
 			if ($trackProgress -gt 1) { sleep 10 }
@@ -141,11 +191,11 @@ try {
 			Overwrite "`t`t🕑 Waiting for menu $(Spinner)" -F Y
 		}
 		sleep 1
+
+		# Report Test Start
+		if ($Headless) { Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']" }
 		LoadTrack -TrackPath $_.FullName | out-null
 		Overwrite "`t`t✅ DCS Ready" -F Green
-		# $process = Get-Process (GetProcessFromPath $dcsExe)
-		# while ($process.MainWindowHandle -eq 0){ Start-Sleep 0.01 }
-		# Get-Window $process | Set-WindowState -Minimize
 		$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
 		try {
 			# Set up endpoint and start listening
@@ -153,7 +203,7 @@ try {
 			$listener = new-object System.Net.Sockets.TcpListener $EndPoint
 			$listener.start()
 		
-			# Wait for an incoming connection, if no connection occurs 
+			# Wait for an incoming connection, if no connection occurs throw an exception
 			$task = $listener.AcceptTcpClientAsync()
 			while (-not $task.AsyncWaitHandle.WaitOne(100)) {
 				if (-Not (GetDCSRunning)) {
@@ -182,8 +232,7 @@ try {
 				}
 			}
 		} catch [Exception] {
-			Write-Host "`t`tError: $($_.ToString())" -ForegroundColor Red -BackgroundColor Black
-			$_.ScriptStackTrace
+			Write-Host "`t`tError: $($_.ToString())`n$($_.ScriptStackTrace)" -ForegroundColor Red -BackgroundColor Black
 		} finally {		 
 			# Close TCP connection and stop listening
 			if ($listener) { $listener.stop() }
@@ -207,10 +256,19 @@ try {
 			$successCount = $successCount + 1
 		} else {
 			Write-Host "`t`t❌ Test Failed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Red -BackgroundColor Black
+			if ($Headless) { Write-Host "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
+		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		if ($output) { $output.Clear() }
 
 		$trackProgress = $trackProgress + 1
+	}
+
+	# We're finished so finish the test suites
+	if ($Headless) {
+		$testSuiteStack | Sort-Object -Descending {(++$script:i)} | % {
+			Write-Host "##teamcity[testSuiteFinished name='$_']"
+		}
 	}
 	if ($QuitDcsOnFinish){
 		sleep 2

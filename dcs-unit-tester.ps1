@@ -260,7 +260,22 @@ try {
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		if ($output) { $output.Clear() }
-
+		while (-not (OnMenu)) {
+			if ($Headless) { continue; }
+			Overwrite "`t`t🕑 Waiting for menu $(Spinner)" -F Y
+		}
+		$tacviewDirectory = "~\Documents\Tacview"
+		if ($Headless -and (Test-Path $tacviewDirectory)) {
+			$tacviewPath = gci "$tacviewDirectory\*DCS-$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
+			if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
+				Write-Host "Tacview found for $testName at $tacviewPath"
+				Write-Host "##teamcity[publishArtifacts '$tacviewPath']"
+				$artifactPath = split-path $tacviewPath -leaf
+				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$artifactPath']"
+			} else {
+				Write-Host "Tacview not found for $testName"
+			}
+		}
 		$trackProgress = $trackProgress + 1
 	}
 

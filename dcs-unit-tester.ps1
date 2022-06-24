@@ -3,6 +3,7 @@ param (
 	[string] $GamePath,
 	[string] $TrackDirectory,
 	[switch] $QuitDcsOnFinish,
+	[switch] $InvertAssersion,
 	[switch] $Headless
 )
 $ErrorActionPreference = "Stop"
@@ -238,6 +239,7 @@ try {
 			if ($listener) { $listener.stop() }
 			if ($stream) { $stream.close() }
 		}
+		$resultSet = $false
 		# Attempt to find the unit test assersion output line
 		$output | ForEach-Object {
 			if ($_ -match $dutAssersionRegex){
@@ -245,12 +247,16 @@ try {
 				$resultSet = $true
 			}
 		}
-
-		# Export result
-		if (-Not $resultSet){
+		if ($resultSet -eq $false){
 			Write-Host "`t`t❌ Track did not send an assersion result, maybe crash?, assuming failed" -ForegroundColor Red -BackgroundColor Black
 			$result = $FALSE
+		} else {
+			if ($InvertAssersion) {
+				Write-Host "`t`t📄 Inverting Result was $result now $(!$result)"
+				$result = (!$result)
+			}
 		}
+		# Export result
 		if ($result -eq $TRUE) {
 			Write-Host "`t`t✅ Test Passed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Green -BackgroundColor Black
 			$successCount = $successCount + 1

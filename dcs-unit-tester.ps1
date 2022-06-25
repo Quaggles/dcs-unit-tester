@@ -4,6 +4,7 @@ param (
 	[string] $TrackDirectory,
 	[switch] $QuitDcsOnFinish,
 	[switch] $InvertAssersion,
+	[switch] $UpdateTracks,
 	[switch] $Headless
 )
 $ErrorActionPreference = "Stop"
@@ -195,6 +196,11 @@ try {
 
 		# Report Test Start
 		if ($Headless) { Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']" }
+		if ($UpdateTracks) {
+			# Update scripts in the mission incase the source scripts updated
+			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+		}
 		LoadTrack -TrackPath $_.FullName | out-null
 		Overwrite "`t`t✅ DCS Ready" -F Green
 		$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";

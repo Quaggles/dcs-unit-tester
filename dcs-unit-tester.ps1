@@ -5,6 +5,7 @@ param (
 	[switch] $QuitDcsOnFinish,
 	[switch] $InvertAssersion,
 	[switch] $UpdateTracks,
+	[switch] $Reseed,
 	[switch] $Headless
 )
 $ErrorActionPreference = "Stop"
@@ -200,6 +201,18 @@ try {
 			# Update scripts in the mission incase the source scripts updated
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+		}
+		if ($Reseed) {
+			# Update track seed in the mission to make it random
+			$temp = New-TemporaryFile
+			try {
+				$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
+				Set-Content -Path $temp -Value $randomSeed
+				Write-Host "Setting track seed to $randomSeed"
+				.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile $temp -Destination "track_data/seed"
+			} finally {
+				Remove-Item -Path $temp
+			}
 		}
 		LoadTrack -TrackPath $_.FullName | out-null
 		Overwrite "`t`t✅ DCS Ready" -F Green

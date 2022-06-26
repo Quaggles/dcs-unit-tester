@@ -1,3 +1,6 @@
+using namespace System
+using namespace System.IO
+using namespace System.Diagnostics
 using namespace System.Text.Json
 param (
 	[string] $GamePath,
@@ -6,12 +9,15 @@ param (
 	[switch] $InvertAssersion,
 	[switch] $UpdateTracks,
 	[switch] $Reseed,
-	[switch] $Headless
+	[switch] $Headless,
+	[float] $DCSStartTimeout = 360,
+	[float] $TrackLoadTimeout = 240,
+	[float] $TrackPingTimeout = 30
 )
 $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
-$connector.Timeout = [System.TimeSpan]::FromSeconds(0.25)
+$connector.Timeout = [TimeSpan]::FromSeconds(5)
 $dutAssersionRegex = '^DUT_ASSERSION=(true|false)$'
 try {
 	if (-Not $GamePath) {
@@ -52,7 +58,7 @@ try {
 
 	function GetProcessFromPath {
 		param($Path)
-		return [System.IO.Path]::GetFileNameWithoutExtension($Path)
+		return [Path]::GetFileNameWithoutExtension($Path)
 	}
 
 	function GetProcessRunning {
@@ -62,6 +68,43 @@ try {
 
 	function GetDCSRunning {
 		return (GetProcessRunning -Path $GamePath)
+	}
+
+	function Wait-Until {
+		param (
+			[scriptblock] $Predicate,
+			[string] $Message,
+			[string] $Prefix,
+			[float] $Timeout = 0,
+			[scriptblock] $MessageFunction,
+			[switch] $NoWaitSpinner
+		)
+		function ElapsedString {
+			return ([DateTime]::Now - $startTime).ToString("hh\:mm\:ss")
+		}
+		try {
+			$startTime = ([DateTime]::Now)
+			if ($Timeout -gt 0) { $waitUntil = $startTime.AddSeconds($Timeout) }
+			Overwrite "$Prefix🕑 $Message - Starting" -ForegroundColor White
+			while ((& $Predicate) -ne $true) {
+				if ($Timeout -gt 0 -and [DateTime]::Now -gt $waitUntil){
+					Overwrite "$Prefix❌ $Message - Breached {$Timeout}s timeout)" -ForegroundColor Red
+					return $false
+				}
+				if (-not $NoWaitSpinner -and $Message) {
+					Overwrite "$Prefix🕑 $(Spinner) $Message - Waiting ($(ElapsedString))" -ForegroundColor Yellow
+				}
+			}
+			if ($Message) {
+				Overwrite "$Prefix✅ $Message - Complete ($(ElapsedString))" -ForegroundColor Green
+			}
+			return $true
+		} catch [Exception] {
+			if ($Message) {
+				Overwrite "$Prefix❌ $Message - Failed ($(ElapsedString))" -ForegroundColor Red
+			}
+			throw
+		}
 	}
 
 	function LoadTrack {
@@ -82,7 +125,7 @@ try {
 		return DCS.startMission('{missionPath}')"
 			$TrackPath = $TrackPath.Trim("`'").Trim("`"").Replace("`\", "/");
 			return $connector.SendReceiveCommandAsync($lua.Replace('{missionPath}', $TrackPath)).GetAwaiter().GetResult()
-		} catch [System.TimeoutException] {
+		} catch [TimeoutException] {
 			return $false;
 		}
 	}
@@ -91,9 +134,52 @@ try {
 		try {
 			$lua = "return DCS.getModelTime()"
 			return ($connector.SendReceiveCommandAsync($lua).GetAwaiter().GetResult().Result -eq 0)
-		} catch [System.TimeoutException] {
-			return $false;
+		} catch [TimeoutException] {
+			return $null;
 		}
+	}
+	function KillDCS {
+		Stop-Process -Name (GetProcessFromPath($GamePath)) -Force
+		sleep 10
+	}
+
+	function IsTrackPlaying {
+		try {
+			$lua = "return DCS.isTrackPlaying()"
+			return ($connector.SendReceiveCommandAsync($lua).GetAwaiter().GetResult().Result -eq 'true')
+		} catch [TimeoutException] {
+			return $null;
+		}
+	}
+
+	function GetModelTime {
+		try {
+			$lua = "return DCS.getModelTime()"
+			return [float]($connector.SendReceiveCommandAsync($lua).GetAwaiter().GetResult().Result)
+		} catch [TimeoutException] {
+			return [float]-1;
+		}
+	}
+
+	function GetTrackEntry([FileInfo] $Path, $EntryPath) {
+		return .$PSScriptRoot/Get-ArchiveEntry.ps1 -Path $Path -EntryPath $EntryPath
+	}
+
+	function GetTrackDuration([FileInfo] $Path) {
+		$regex0 = "(?m)^absoluteTime0\s*=\s*(\d+(?:\.\d+)?)"
+		$regex1 = "(?m)^absoluteTime1\s*=\s*(\d+(?:\.\d+)?)"
+		$data = (GetTrackEntry -Path $Path -EntryPath "track_data/times")
+		if ($data -match $regex0) {
+			$absoluteTime0 = $Matches[1]
+		} else {
+			Write-Error "Regex didn't match $data"
+		}
+		if ($data -match $regex1) {
+			$absoluteTime1 = $Matches[1]
+		} else {
+			Write-Error "Regex didn't match $data"
+		}
+		return ($absoluteTime1 - $absoluteTime0)
 	}
 
 	function Ping {
@@ -105,20 +191,25 @@ try {
 	}
 	function Overwrite() {
 		param(
-			[string] $text,
+			[string] $Text,
+			[switch] $NewLine,
 			$ForegroundColor = 'white',
 			$BackgroundColor = 'black'
 		)
+		Write-Host "`r$text$(' '*(PadTextLength($text)))" -NoNewline:(!$NewLine) -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
+	}
+	function PadTextLength {
+		param([string] $text)
 		$textLen = 0
 		for ($i=0; $i -lt $text.Length; $i++) {
-			if ($text[$i] -eq [char]9){
+			# Tab = 8 spaces
+			if ($text[$i] -eq [char]9) {
 				$textLen += 8
 			} else {
 				$textLen += 1
 			}
 		}
-		$text = "`r$text$(' '*($Host.UI.RawUI.WindowSize.Width - $textLen))"
-		Write-Host $text -NoNewline -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
+		return ($Host.UI.RawUI.WindowSize.Width - $textLen)
 	}
 	# Gets all the tracks in the track directory that do not start with a .
 	$tracks = Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
@@ -126,17 +217,29 @@ try {
 	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
 	$trackProgress = 1
 	$successCount = 0
-	$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
-	$globalStopwatch =  [system.diagnostics.stopwatch]::StartNew()
+	$stopwatch =  [stopwatch]::StartNew()
+	$globalStopwatch =  [stopwatch]::StartNew()
 
 	# Stack representing the subdirectory we are in, used for reporting correct nested test suites to TeamCity
 	$testSuiteStack = New-Object Collections.Generic.List[string]
 
 	# Run the tracks
 	$tracks | ForEach-Object {
-		$relativeTestPath = $([System.IO.Path]::GetRelativePath($pwd, $_.FullName))
+		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$testName = $(split-path $_.FullName -leafBase)
+
+		# Ensure DCS is started and ready to go
+		if (-not (GetDCSRunning)) {
+			Write-Host "`t✅ Starting DCS" -F Green
+			Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
+		}
+		$started = (Wait-Until -Predicate {OnMenu -eq $true} -Prefix "`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
+		if ($started -eq $false) {
+			Write-Host "`t❌ Restarting DCS" -F R
+			KillDCS
+			throw [TimeoutException]
+		}
 		if ($Headless) {
 			# Finish any test suites we were in if they aren't in the new path
 			$index = $testSuiteStack.Count - 1
@@ -177,23 +280,7 @@ try {
 		} else {
 			Write-Host "`t($trackProgress/$trackCount) Running `"$relativeTestPath`""
 		}
-
-		# Start DCS
-		if (-not (GetDCSRunning)){
-			Overwrite "`t`t🕑 Starting DCS $(Spinner)" -F Y
-			if ($trackProgress -gt 1) { sleep 10 }
-			Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
-		}
-		while (-not (Ping)) {
-			if ($Headless) { continue; }
-			Overwrite "`t`t🕑 Waiting for game response $(Spinner)" -F Y
-		}
-		sleep 1
-		while (-not (OnMenu)) {
-			if ($Headless) { continue; }
-			Overwrite "`t`t🕑 Waiting for menu $(Spinner)" -F Y
-		}
-		sleep 1
+		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
 
 		# Report Test Start
 		if ($Headless) { Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']" }
@@ -214,10 +301,14 @@ try {
 				Remove-Item -Path $temp
 			}
 		}
+
+		Write-Host "`t`t✅ Commanding DCS to load track" -F Green
 		LoadTrack -TrackPath $_.FullName | out-null
-		Overwrite "`t`t✅ DCS Ready" -F Green
 		$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
 		try {
+			$stopwatch.Reset();
+			$stopwatch.Start();
+
 			# Set up endpoint and start listening
 			$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
 			$listener = new-object System.Net.Sockets.TcpListener $EndPoint
@@ -225,44 +316,84 @@ try {
 		
 			# Wait for an incoming connection, if no connection occurs throw an exception
 			$task = $listener.AcceptTcpClientAsync()
-			while (-not $task.AsyncWaitHandle.WaitOne(100)) {
-				if (-Not (GetDCSRunning)) {
-					throw [System.TimeoutException] "❌ Track TCP Connection"
-				}
+			$trackStartedPredicate = {$Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0)}
+			if (-not (Wait-Until -Predicate $trackStartedPredicate -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+				Write-Host "`t`t❌ Restarting DCS" -F R
+				KillDCS
+				throw [TimeoutException]
 			}
 			$data = $task.GetAwaiter().GetResult()
-			Write-Host "`t`t✅ DCS TCP Connection" -ForegroundColor Green -BackgroundColor Black
-			$stopwatch.Reset();
-			$stopwatch.Start();
-			# Stream setup
 			$stream = $data.GetStream() 
-			$bytes = New-Object System.Byte[] 1024
-		
-			# Read data from stream and write it to host
-			while (($i = $stream.Read($bytes,0,$bytes.Length)) -ne 0){
-				$EncodedText = New-Object System.Text.ASCIIEncoding
-				$EncodedText.GetString($bytes,0, $i).Split(';') | % {
-					if (-not $_) { return }
-					# Print output messages that aren't the assersion	
-					if (-not ($_ -match $dutAssersionRegex)) { Write-Host "`t`t📄 $_" }
-					$output.Add($_)
-				}
-				if (-Not (GetDCSRunning)) {
-					throw [System.TimeoutException] "❌ Track ended without sending anything"
+
+			# If we're doing false negative testing end the mission after 1 second to see if it returns false
+			if ($InvertAssersion) {
+				sleep 1
+				try {
+					$connector.SendReceiveCommandAsync("DCS.stopMission()").GetAwaiter().GetResult() | out-null
+				} catch {
+					#Ignore errors
 				}
 			}
+
+			$tcpListenScriptBlock = {
+				param ($Stream, $OutputList)
+				$bytes = New-Object System.Byte[] 1024
+				# Read data from stream and write it to host
+				$EncodedText = New-Object System.Text.ASCIIEncoding
+				while (($i = $Stream.Read($bytes, 0, $bytes.Length)) -ne 0) {
+					$EncodedText.GetString($bytes,0, $i).Split(';') | % {
+						if ($_) {
+							# Print output messages that aren't the assersion	
+							# if (-not ($_ -match $dutAssersionRegex)) { Write-Output "`t`t📄 $_" }
+							$OutputList.Add($_)
+						}
+					}
+				}
+			}
+			$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
+			$lastUpdate = [DateTime]::Now
+			while ((!$job.Finished) -or (IsTrackPlaying -eq $true)) {
+				$modelTime = [float](GetModelTime)
+				if ($modelTime -gt $lastModelTime) {
+					$lastUpdate = [DateTime]::Now
+				}
+				$lastUpdateDelta = (([DateTime]::Now - $lastUpdate).TotalSeconds)
+				if (!$Headless) {
+					$string = "`t`t🕑 $(Spinner) Waiting for track to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds" -f ($modelTime/$trackDuration),$modelTime,$trackDuration,($stopwatch.Elapsed.TotalSeconds)
+					Overwrite $string -ForegroundColor Yellow
+				}
+				if ($lastUpdateDelta -gt $TrackPingTimeout) {
+					Write-Host ("`n`t`t❌ DCS Track Unresponsive, last heard from {0:N1} seconds ago, breached {1}s timeout, killing process" -f $lastUpdateDelta,$TrackPingTimeout) -F R
+					KillDCS
+					throw [TimeoutException]
+				}
+				$lastModelTime = $modelTime
+				# Throttle so DCS isn't checked too often
+				sleep 1
+			}
+			if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}
+
+			# Output debug
+			Write-Host "`t`t📄 Output:"
+			$output | % {
+				Write-Host "`t`t    $_"
+			}			
 		} catch [Exception] {
 			Write-Host "`t`tError: $($_.ToString())`n$($_.ScriptStackTrace)" -ForegroundColor Red -BackgroundColor Black
-		} finally {		 
+		} finally {
 			# Close TCP connection and stop listening
-			if ($listener) { $listener.stop() }
 			if ($stream) { $stream.close() }
+			if ($listener) { $listener.stop() }
+			if ($job) {
+				$job | Stop-Job
+				$job | Remove-Job
+			}
 		}
 		$resultSet = $false
 		# Attempt to find the unit test assersion output line
 		$output | ForEach-Object {
 			if ($_ -match $dutAssersionRegex){
-				$result = [System.Boolean]::Parse($Matches[1])
+				$result = [Boolean]::Parse($Matches[1])
 				$resultSet = $true
 			}
 		}
@@ -285,10 +416,6 @@ try {
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		if ($output) { $output.Clear() }
-		while (-not (OnMenu)) {
-			if ($Headless) { continue; }
-			Overwrite "`t`t🕑 Waiting for menu $(Spinner)" -F Y
-		}
 		$tacviewDirectory = "~\Documents\Tacview"
 		if ($Headless -and (Test-Path $tacviewDirectory)) {
 			$tacviewPath = gci "$tacviewDirectory\*DCS-$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1

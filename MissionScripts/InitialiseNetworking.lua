@@ -16,9 +16,10 @@ function Output(message)
         socket.try(dutExportSocket:send(tostring(message)..";"))
     end
 end
-
+Output = socket.protect(Output)
 function Assert(message)
     if socket ~= nil and dutExportSocket ~= nil then
         socket.try(dutExportSocket:send("DUT_ASSERSION="..tostring(message)..";"))
     end
 end
+Assert = socket.protect(Assert)

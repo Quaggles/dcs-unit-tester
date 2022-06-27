@@ -12,7 +12,9 @@ param (
 	[switch] $Headless,
 	[float] $DCSStartTimeout = 360,
 	[float] $TrackLoadTimeout = 240,
-	[float] $TrackPingTimeout = 30
+	[float] $TrackPingTimeout = 30,
+	[int] $RetryLimit = 2,
+	[int] $RerunCount = 1
 )
 $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
@@ -80,7 +82,7 @@ try {
 			[switch] $NoWaitSpinner
 		)
 		function ElapsedString {
-			return ([DateTime]::Now - $startTime).ToString("hh\:mm\:ss")
+			return (([DateTime]::Now - $startTime).ToString('hh\:mm\:ss'))
 		}
 		try {
 			$startTime = ([DateTime]::Now)
@@ -88,7 +90,7 @@ try {
 			Overwrite "$Prefix🕑 $Message - Starting" -ForegroundColor White
 			while ((& $Predicate) -ne $true) {
 				if ($Timeout -gt 0 -and [DateTime]::Now -gt $waitUntil){
-					Overwrite "$Prefix❌ $Message - Breached {$Timeout}s timeout)" -ForegroundColor Red
+					Overwrite "$Prefix❌ $Message - Breached $Timeout second timeout)" -ForegroundColor Red
 					return $false
 				}
 				if (-not $NoWaitSpinner -and $Message) {
@@ -164,6 +166,9 @@ try {
 	function GetTrackEntry([FileInfo] $Path, $EntryPath) {
 		return .$PSScriptRoot/Get-ArchiveEntry.ps1 -Path $Path -EntryPath $EntryPath
 	}
+	function GetSeed([FileInfo] $Path) {
+		return ((.$PSScriptRoot/Get-ArchiveEntry.ps1 -Path $Path -EntryPath "track_data/seed") -replace "`n","" -replace "`r","")
+	}
 
 	function GetTrackDuration([FileInfo] $Path) {
 		$regex0 = "(?m)^absoluteTime0\s*=\s*(\d+(?:\.\d+)?)"
@@ -225,21 +230,13 @@ try {
 
 	# Run the tracks
 	$tracks | ForEach-Object {
+		# Get track information
 		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$testName = $(split-path $_.FullName -leafBase)
+		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
 
-		# Ensure DCS is started and ready to go
-		if (-not (GetDCSRunning)) {
-			Write-Host "`t✅ Starting DCS" -F Green
-			Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
-		}
-		$started = (Wait-Until -Predicate {OnMenu -eq $true} -Prefix "`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
-		if ($started -eq $false) {
-			Write-Host "`t❌ Restarting DCS" -F R
-			KillDCS
-			throw [TimeoutException]
-		}
+		# Headless client reporting
 		if ($Headless) {
 			# Finish any test suites we were in if they aren't in the new path
 			$index = $testSuiteStack.Count - 1
@@ -274,148 +271,179 @@ try {
 			}
 		}
 
-		# Progress report
-		if ($Headless) {
-			Write-Host "##teamcity[progressMessage '($trackProgress/$trackCount) Running `"$relativeTestPath`"']"
-		} else {
-			Write-Host "`t($trackProgress/$trackCount) Running `"$relativeTestPath`""
-		}
-		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
-
 		# Report Test Start
 		if ($Headless) { Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']" }
-		if ($UpdateTracks) {
-			# Update scripts in the mission incase the source scripts updated
-			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
-			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
-		}
-		if ($Reseed) {
-			# Update track seed in the mission to make it random
-			$temp = New-TemporaryFile
+		$stopwatch.Reset();
+		$stopwatch.Start();
+		$successfulRunCount = 0
+		$failureCount = 0
+		# Track retry loop
+		while (($successfulRunCount -lt $RerunCount) -and ($failureCount -le $RetryLimit)) {
 			try {
-				$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
-				Set-Content -Path $temp -Value $randomSeed
-				Write-Host "Setting track seed to $randomSeed"
-				.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile $temp -Destination "track_data/seed"
-			} finally {
-				Remove-Item -Path $temp
-			}
-		}
-
-		Write-Host "`t`t✅ Commanding DCS to load track" -F Green
-		LoadTrack -TrackPath $_.FullName | out-null
-		$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
-		try {
-			$stopwatch.Reset();
-			$stopwatch.Start();
-
-			# Set up endpoint and start listening
-			$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
-			$listener = new-object System.Net.Sockets.TcpListener $EndPoint
-			$listener.start()
-		
-			# Wait for an incoming connection, if no connection occurs throw an exception
-			$task = $listener.AcceptTcpClientAsync()
-			$trackStartedPredicate = {$Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0)}
-			if (-not (Wait-Until -Predicate $trackStartedPredicate -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
-				Write-Host "`t`t❌ Restarting DCS" -F R
-				KillDCS
-				throw [TimeoutException]
-			}
-			$data = $task.GetAwaiter().GetResult()
-			$stream = $data.GetStream() 
-
-			# If we're doing false negative testing end the mission after 1 second to see if it returns false
-			if ($InvertAssersion) {
-				sleep 1
-				try {
-					$connector.SendReceiveCommandAsync("DCS.stopMission()").GetAwaiter().GetResult() | out-null
-				} catch {
-					#Ignore errors
+				$progressMessage = "`tRunning Track ($trackProgress/$trackCount) `"$relativeTestPath`""
+				if ($RerunCount -gt 1) {
+					$progressMessage += ", rerun ($successfulRunCount/$RerunCount)"
 				}
-			}
+				if ($RetryLimit -gt 0 -and $failureCount -gt 0) {
+					$progressMessage += ", failed runs ($failureCount/$RetryLimit)"
+				}
+				# Progress report
+				if ($Headless) {
+					Write-Host "##teamcity[progressMessage '$progressMessage']"
+				} else {
+					Write-Host $progressMessage
+				}
 
-			$tcpListenScriptBlock = {
-				param ($Stream, $OutputList)
-				$bytes = New-Object System.Byte[] 1024
-				# Read data from stream and write it to host
-				$EncodedText = New-Object System.Text.ASCIIEncoding
-				while (($i = $Stream.Read($bytes, 0, $bytes.Length)) -ne 0) {
-					$EncodedText.GetString($bytes,0, $i).Split(';') | % {
-						if ($_) {
-							# Print output messages that aren't the assersion	
-							# if (-not ($_ -match $dutAssersionRegex)) { Write-Output "`t`t📄 $_" }
-							$OutputList.Add($_)
-						}
+				# Ensure DCS is started and ready to go
+				if (-not (GetDCSRunning)) {
+					Write-Host "`t`t✅ Starting DCS" -F Green
+					Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
+				}
+				$started = (Wait-Until -Predicate {OnMenu -eq $true} -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
+				if ($started -eq $false) {
+					throw [TimeoutException] "DCS did not start within $DCSStartTimeout seconds"
+				}
+				if ($UpdateTracks) {
+					# Update scripts in the mission incase the source scripts updated
+					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+				}
+				if ($Reseed) {
+					# Update track seed in the mission to make it random
+					$temp = New-TemporaryFile
+					try {
+						$oldSeed = (GetSeed -Path $_.FullName)
+						$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
+						Set-Content -Path $temp -Value $randomSeed
+						Write-Host "`t`tℹ️ Randomising track seed, Old: $oldSeed, New: $randomSeed"
+						if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile $temp -Destination "track_data/seed"
+					} finally {
+						Remove-Item -Path $temp
 					}
 				}
-			}
-			$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
-			$lastUpdate = [DateTime]::Now
-			while ((!$job.Finished) -or (IsTrackPlaying -eq $true)) {
-				$modelTime = [float](GetModelTime)
-				if ($modelTime -gt $lastModelTime) {
-					$lastUpdate = [DateTime]::Now
-				}
-				$lastUpdateDelta = (([DateTime]::Now - $lastUpdate).TotalSeconds)
-				if (!$Headless) {
-					$string = "`t`t🕑 $(Spinner) Waiting for track to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds" -f ($modelTime/$trackDuration),$modelTime,$trackDuration,($stopwatch.Elapsed.TotalSeconds)
-					Overwrite $string -ForegroundColor Yellow
-				}
-				if ($lastUpdateDelta -gt $TrackPingTimeout) {
-					Write-Host ("`n`t`t❌ DCS Track Unresponsive, last heard from {0:N1} seconds ago, breached {1}s timeout, killing process" -f $lastUpdateDelta,$TrackPingTimeout) -F R
-					KillDCS
-					throw [TimeoutException]
-				}
-				$lastModelTime = $modelTime
-				# Throttle so DCS isn't checked too often
-				sleep 1
-			}
-			if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}
 
-			# Output debug
-			Write-Host "`t`t📄 Output:"
-			$output | % {
-				Write-Host "`t`t    $_"
-			}			
-		} catch [Exception] {
-			Write-Host "`t`tError: $($_.ToString())`n$($_.ScriptStackTrace)" -ForegroundColor Red -BackgroundColor Black
-		} finally {
-			# Close TCP connection and stop listening
-			if ($stream) { $stream.close() }
-			if ($listener) { $listener.stop() }
-			if ($job) {
-				$job | Stop-Job -ErrorAction SilentlyContinue
-				$job | Remove-Job -ErrorAction SilentlyContinue
+				Write-Host "`t`t✅ Commanding DCS to load track" -F Green
+				LoadTrack -TrackPath $_.FullName | out-null
+				$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
+				try {
+
+					# Set up endpoint and start listening
+					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
+					$listener = new-object System.Net.Sockets.TcpListener $EndPoint
+					$listener.start()
+				
+					# Wait for an incoming connection, if no connection occurs throw an exception
+					$task = $listener.AcceptTcpClientAsync()
+					$trackStartedPredicate = {$Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0)}
+					if (-not (Wait-Until -Predicate $trackStartedPredicate -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+						throw [TimeoutException] "Track did not start within timeout of $TrackLoadTimeout seconds"
+					}
+					$data = $task.GetAwaiter().GetResult()
+					$stream = $data.GetStream() 
+
+					# If we're doing false negative testing end the mission after 1 second to see if it returns false
+					if ($InvertAssersion) {
+						sleep 1
+						try {
+							$connector.SendReceiveCommandAsync("DCS.stopMission()").GetAwaiter().GetResult() | out-null
+						} catch {
+							#Ignore errors
+						}
+					}
+
+					$tcpListenScriptBlock = {
+						param ($Stream, $OutputList)
+						$bytes = New-Object System.Byte[] 1024
+						# Read data from stream and write it to host
+						$EncodedText = New-Object System.Text.ASCIIEncoding
+						while (($i = $Stream.Read($bytes, 0, $bytes.Length)) -ne 0) {
+							$EncodedText.GetString($bytes,0, $i).Split(';') | % {
+								if ($_) {
+									# Print output messages that aren't the assersion	
+									# if (-not ($_ -match $dutAssersionRegex)) { Write-Output "`t`t📄 $_" }
+									$OutputList.Add($_)
+								}
+							}
+						}
+					}
+					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
+
+					# Wait for track to end loop
+					$lastUpdate = [DateTime]::Now
+					while ((!$job.Finished) -or (IsTrackPlaying -eq $true)) {
+						$modelTime = [float](GetModelTime)
+						if ($modelTime -gt $lastModelTime) {
+							$lastUpdate = [DateTime]::Now
+						}
+						$lastUpdateDelta = (([DateTime]::Now - $lastUpdate).TotalSeconds)
+						if (!$Headless) {
+							$string = "`t`t🕑 $(Spinner) Waiting for track to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds" -f ($modelTime/$trackDuration),$modelTime,$trackDuration,($stopwatch.Elapsed.TotalSeconds)
+							Overwrite $string -ForegroundColor Yellow
+						}
+						if ($modelTime -gt ($trackDuration * 2)){
+							throw ("DCS Track has ran for {0:N1} seconds, 2x longer than reported duration of {1:N1} seconds, aborting..." -f $modelTime,$trackDuration)
+						}
+						if ($lastUpdateDelta -gt $TrackPingTimeout) {
+							throw [TimeoutException] ("DCS Track Unresponsive, last heard from {0:N1} seconds ago, breached {1}s timeout" -f $lastUpdateDelta,$TrackPingTimeout)
+						}
+						$lastModelTime = $modelTime
+						# Throttle so DCS isn't checked too often
+						sleep 1
+					}
+					if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}
+
+					# Output debug
+					Write-Host "`t`t📄 Output:"
+					$output | % {
+						Write-Host "`t`t    $_"
+					}			
+				} finally {
+					# Close TCP connection and stop listening
+					if ($stream) { $stream.close() }
+					if ($listener) { $listener.stop() }
+					if ($job) {
+						$job | Stop-Job -ErrorAction SilentlyContinue
+						$job | Remove-Job -ErrorAction SilentlyContinue
+					}
+				}
+				$resultSet = $false
+				# Attempt to find the unit test assersion output line
+				$output | ForEach-Object {
+					if ($_ -match $dutAssersionRegex){
+						$result = [Boolean]::Parse($Matches[1])
+						$resultSet = $true
+					}
+				}
+				if ($resultSet -eq $false) {
+					throw "Track did not send an assersion result, maybe crash?, assuming failed"
+				}
+				$successfulRunCount = $successfulRunCount + 1
+			} catch {
+				Write-Host "`n`t`t❌ Error on attempt ($failureCount/$RetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
+				KillDCS
+				$failureCount = $failureCount + 1
 			}
+			if ($output) { $output.Clear() }
 		}
-		$resultSet = $false
-		# Attempt to find the unit test assersion output line
-		$output | ForEach-Object {
-			if ($_ -match $dutAssersionRegex){
-				$result = [Boolean]::Parse($Matches[1])
-				$resultSet = $true
-			}
-		}
-		if ($resultSet -eq $false){
-			Write-Host "`t`t❌ Track did not send an assersion result, maybe crash?, assuming failed" -ForegroundColor Red -BackgroundColor Black
-			$result = $FALSE
-		} else {
-			if ($InvertAssersion) {
-				Write-Host "`t`t📄 Inverting Result was $result now $(!$result)"
-				$result = (!$result)
-			}
+		
+		if ($InvertAssersion) {
+			Write-Host "`t📄 Inverting Result was $result now $(!$result)"
+			$result = (!$result)
 		}
 		# Export result
-		if ($result -eq $TRUE) {
-			Write-Host "`t`t✅ Test Passed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Green -BackgroundColor Black
+		if ($resultSet -eq $true -and $result -eq $TRUE) {
+			Write-Host "`t✅ Test Passed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Green -BackgroundColor Black
 			$successCount = $successCount + 1
 		} else {
-			Write-Host "`t`t❌ Test Failed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Red -BackgroundColor Black
+			Write-Host "`t❌ Test Failed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Red -BackgroundColor Black
 			if ($Headless) { Write-Host "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
-		if ($output) { $output.Clear() }
+
+		# Record tacview artifact
 		$tacviewDirectory = "~\Documents\Tacview"
 		if ($Headless -and (Test-Path $tacviewDirectory)) {
 			$tacviewPath = gci "$tacviewDirectory\*DCS-$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
@@ -428,6 +456,7 @@ try {
 				Write-Host "Tacview not found for $testName"
 			}
 		}
+
 		$trackProgress = $trackProgress + 1
 	}
 

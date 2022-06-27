@@ -139,7 +139,7 @@ try {
 		}
 	}
 	function KillDCS {
-		Stop-Process -Name (GetProcessFromPath($GamePath)) -Force
+		Stop-Process -Name (GetProcessFromPath($GamePath)) -Force -ErrorAction SilentlyContinue
 		sleep 10
 	}
 
@@ -385,8 +385,8 @@ try {
 			if ($stream) { $stream.close() }
 			if ($listener) { $listener.stop() }
 			if ($job) {
-				$job | Stop-Job
-				$job | Remove-Job
+				$job | Stop-Job -ErrorAction SilentlyContinue
+				$job | Remove-Job -ErrorAction SilentlyContinue
 			}
 		}
 		$resultSet = $false

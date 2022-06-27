@@ -3,13 +3,13 @@ using namespace System.IO
 using namespace System.Diagnostics
 using namespace System.Text.Json
 param (
-	[string] $GamePath,
-	[string] $TrackDirectory,
+	[string] $GamePath, # Path to the game executable e.g. C:/DCS World/bin/dcs.exe
+	[string] $TrackDirectory, # Filter for the tracks
 	[switch] $QuitDcsOnFinish,
-	[switch] $InvertAssersion,
-	[switch] $UpdateTracks,
-	[switch] $Reseed,
-	[switch] $Headless,
+	[switch] $InvertAssersion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
+	[switch] $UpdateTracks, # Update scripts in the track file with those from MissionScripts/
+	[switch] $Reseed, # Regenerate the track seed before playing
+	[switch] $Headless, # Output TeamCity service messages
 	[float] $DCSStartTimeout = 360,
 	[float] $TrackLoadTimeout = 240,
 	[float] $TrackPingTimeout = 30,

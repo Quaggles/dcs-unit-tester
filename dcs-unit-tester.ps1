@@ -20,7 +20,6 @@ $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
 $connector.Timeout = [TimeSpan]::FromSeconds(5)
-$dutAssersionRegex = '^DUT_ASSERSION=(true|false)$'
 try {
 	if (-Not $GamePath) {
 		Write-Host "No Game Path provided, attempting to retrieve from registry" -ForegroundColor Yellow -BackgroundColor Black
@@ -362,8 +361,6 @@ try {
 						while (($i = $Stream.Read($bytes, 0, $bytes.Length)) -ne 0) {
 							$EncodedText.GetString($bytes,0, $i).Split(';') | % {
 								if ($_) {
-									# Print output messages that aren't the assersion	
-									# if (-not ($_ -match $dutAssersionRegex)) { Write-Output "`t`t📄 $_" }
 									$OutputList.Add($_)
 								}
 							}
@@ -393,13 +390,7 @@ try {
 						# Throttle so DCS isn't checked too often
 						sleep 1
 					}
-					if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}
-
-					# Output debug
-					Write-Host "`t`t📄 Output:"
-					$output | % {
-						Write-Host "`t`t    $_"
-					}			
+					if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}		
 				} finally {
 					# Close TCP connection and stop listening
 					if ($stream) { $stream.close() }
@@ -411,11 +402,15 @@ try {
 				}
 				$resultSet = $false
 				# Attempt to find the unit test assersion output line
-				$output | ForEach-Object {
-					if ($_ -match $dutAssersionRegex){
+				Write-Host "`t`t📄 Output:"
+				$output | % {
+					if ($_ -match '^DUT_ASSERSION=(true|false)$') {
 						$result = [Boolean]::Parse($Matches[1])
 						$resultSet = $true
-					}
+					} elseif ($_ -match '^DUT_OUTPUT=(.+)$'){
+						Write-Output $Matches[1]
+					} 
+					Write-Host "`t`t    $_"
 				}
 				if ($resultSet -eq $false) {
 					throw "Track did not send an assersion result, maybe crash?, assuming failed"

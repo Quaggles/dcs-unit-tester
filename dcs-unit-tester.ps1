@@ -74,6 +74,7 @@ try {
 	function Wait-Until {
 		param (
 			[scriptblock] $Predicate,
+			[scriptblock] $CancelIf,
 			[string] $Message,
 			[string] $Prefix,
 			[float] $Timeout = 0,
@@ -88,7 +89,11 @@ try {
 			if ($Timeout -gt 0) { $waitUntil = $startTime.AddSeconds($Timeout) }
 			Overwrite "$Prefix🕑 $Message - Starting" -ForegroundColor White
 			while ((& $Predicate) -ne $true) {
-				if ($Timeout -gt 0 -and [DateTime]::Now -gt $waitUntil){
+				if ($CancelIf -and ((& $CancelIf) -eq $true)) {
+					Overwrite "$Prefix❌ $Message - Cancelled ($(ElapsedString))" -ForegroundColor Red
+					return $false
+				}
+				if ($Timeout -gt 0 -and [DateTime]::Now -gt $waitUntil) {
 					Overwrite "$Prefix❌ $Message - Breached $Timeout second timeout)" -ForegroundColor Red
 					return $false
 				}
@@ -298,8 +303,9 @@ try {
 				if (-not (GetDCSRunning)) {
 					Write-Host "`t`t✅ Starting DCS" -F Green
 					Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
+					sleep 5
 				}
-				$started = (Wait-Until -Predicate {OnMenu -eq $true} -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
+				$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
 				if ($started -eq $false) {
 					throw [TimeoutException] "DCS did not start within $DCSStartTimeout seconds"
 				}
@@ -337,8 +343,8 @@ try {
 				
 					# Wait for an incoming connection, if no connection occurs throw an exception
 					$task = $listener.AcceptTcpClientAsync()
-					$trackStartedPredicate = {$Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0)}
-					if (-not (Wait-Until -Predicate $trackStartedPredicate -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+					$trackStartedPredicate = { $Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0) }
+					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
 						throw [TimeoutException] "Track did not start within timeout of $TrackLoadTimeout seconds"
 					}
 					$data = $task.GetAwaiter().GetResult()
@@ -418,6 +424,8 @@ try {
 				}
 				$runCount = $runCount + 1
 			} catch {
+				$resultSet = $false
+				$result = $false
 				Write-Host "`n`t`t❌ Error on attempt ($failureCount/$RetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
 				KillDCS
 				$failureCount = $failureCount + 1

@@ -11,9 +11,13 @@ try {
     if (Test-Path -LiteralPath $dcsPath) {
         return $dcsPath
     } else {
-        throw
+        if ($GetExecutable) {
+            throw [System.IO.FileNotFoundException] "File not found at: ""$dcsPath"""
+        } else {
+            throw [System.IO.DirectoryNotFoundException] "Directory not found at: ""$dcsPath"""
+        }
     }
 } catch {
-    Write-Error "Could not find DCS World path at $regPath"
+    Write-Error "Could not find DCS World path, $_"
     exit 1
 }

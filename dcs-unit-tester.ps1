@@ -239,6 +239,9 @@ try {
 		$trackDescription = $null
 		try {
 			$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
+			if ([string]::IsNullOrWhiteSpace($trackDescription)) {
+				throw "Description existed but was empty"
+			}
 			Write-Host "`t✅ Track Description Retrieved: " -F Green
 			Write-Host $trackDescription
 		} catch {

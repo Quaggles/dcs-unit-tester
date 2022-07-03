@@ -71,6 +71,16 @@ try {
 		return (GetProcessRunning -Path $GamePath)
 	}
 
+	function TeamCitySafeString($Value) {
+		$Value = $Value.Replace("'","|'")
+		$Value = $Value.Replace("`n","|`n'")
+		$Value = $Value.Replace("`r","|`r")
+		$Value = $Value.Replace("|","||")
+		$Value = $Value.Replace("[","|[")
+		$Value = $Value.Replace("]","|]")
+		return $Value
+	}
+
 	function Wait-Until {
 		param (
 			[scriptblock] $Predicate,
@@ -239,6 +249,14 @@ try {
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$testName = $(split-path $_.FullName -leafBase)
 		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
+		$trackDescription = $null
+		try {
+			$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
+			Write-Host "`t✅ Track Description Retrieved: " -F Green
+			Write-Host $trackDescription
+		} catch {
+			Write-Host "`t❌ Failed to get track description: $_" -F Red
+		}
 
 		# Headless client reporting
 		if ($Headless) {
@@ -276,7 +294,12 @@ try {
 		}
 
 		# Report Test Start
-		if ($Headless) { Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']" }
+		if ($Headless) {
+			Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']"
+			if (-not [string]::IsNullOrWhiteSpace($trackDescription)) {
+				Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
+			}
+		}
 		$stopwatch.Reset();
 		$stopwatch.Start();
 		$runCount = 1

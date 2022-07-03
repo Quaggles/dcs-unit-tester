@@ -11,4 +11,4 @@ function DCS.startMission(filename)
     return _G.module_mission.play({ file = filename, command = command}, '', filename)
 end
 
-return DCS.startMission('track.trk')
+return DCS.startMission('{missionPath}')

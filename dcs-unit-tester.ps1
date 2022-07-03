@@ -125,24 +125,11 @@ try {
 
 	function LoadTrack {
 		param([string] $TrackPath)
-		try {
-			$lua = "local function ends_with(str, ending)
-			return ending == '' or str:sub(-#ending) == ending
-		end
-		
-		function DCS.startMission(filename)
-		local command = 'mission'
-		if ends_with(filename, '.trk') then
-				command = 'track'
-			end
-			return _G.module_mission.play({ file = filename, command = command}, '', filename)
-		end
-		
-		return DCS.startMission('{missionPath}')"
-			$TrackPath = $TrackPath.Trim("`'").Trim("`"").Replace("`\", "/");
-			return $connector.SendReceiveCommandAsync($lua.Replace('{missionPath}', $TrackPath)).GetAwaiter().GetResult()
-		} catch [TimeoutException] {
-			return $false;
+		$TrackPath = $TrackPath.Trim("`'").Trim("`"").Replace("`\", "/");
+		$lua = Get-Content -Path "$PSScriptRoot/Scripts/DCS.startMission.lua" -Raw
+		$result = ($connector.SendReceiveCommandAsync($lua.Replace('{missionPath}', $TrackPath)).GetAwaiter().GetResult())
+		if ($result.Status -eq "RuntimeError"){
+			throw [InvalidOperationException] "Error Loading Track: $($result.Result)"
 		}
 	}
 
@@ -354,10 +341,10 @@ try {
 					}
 				}
 
-				Write-Host "`t`t✅ Commanding DCS to load track" -F Green
-				LoadTrack -TrackPath $_.FullName | out-null
-				$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
 				try {
+					Write-Host "`t`t✅ Commanding DCS to load track" -F Green
+					LoadTrack -TrackPath $_.FullName
+					$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
 
 					# Set up endpoint and start listening
 					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 

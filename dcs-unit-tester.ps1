@@ -237,17 +237,6 @@ try {
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$testName = $(split-path $_.FullName -leafBase)
 		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
-		$trackDescription = $null
-		try {
-			$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
-			if ([string]::IsNullOrWhiteSpace($trackDescription)) {
-				throw "Description existed but was empty"
-			}
-			Write-Host "`t✅ Track Description Retrieved: " -F Green
-			Write-Host $trackDescription
-		} catch {
-			Write-Host "`t❌ Failed to get track description: $_" -F Red
-		}
 
 		# Headless client reporting
 		if ($Headless) {
@@ -287,9 +276,6 @@ try {
 		# Report Test Start
 		if ($Headless) {
 			Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']"
-			if (-not [string]::IsNullOrWhiteSpace($trackDescription)) {
-				Write-Host "##teamcity[testMetadata testName='$testName' name='1. Description' value='$(TeamCitySafeString -Value $trackDescription)']"
-			}
 		}
 		$stopwatch.Reset();
 		$stopwatch.Start();
@@ -311,6 +297,22 @@ try {
 					Write-Host "##teamcity[progressMessage '$progressMessage']"
 				} else {
 					Write-Host $progressMessage
+				}
+
+				# Track Description
+				$trackDescription = $null
+				try {
+					$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
+					if ([string]::IsNullOrWhiteSpace($trackDescription)) {
+						throw "Description existed but was empty"
+					}
+					Write-Host "`t`t✅ Track Description Retrieved: " -F Green
+					Write-Host $trackDescription
+				} catch {
+					Write-Host "`t`t❌ Failed to get track description: $_" -F Red
+				}
+				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
+					Write-Host "##teamcity[testMetadata testName='$testName' name='1. Description' value='$(TeamCitySafeString -Value $trackDescription)']"
 				}
 
 				# Ensure DCS is started and ready to go

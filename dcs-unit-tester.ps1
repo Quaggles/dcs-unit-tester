@@ -393,14 +393,19 @@ try {
 
 					# Wait for track to end loop
 					$lastUpdate = [DateTime]::Now
+					$sleepTime = 1
 					while ((!$job.Finished) -or (IsTrackPlaying -eq $true)) {
 						$modelTime = [float](GetModelTime)
 						if ($modelTime -gt $lastModelTime) {
 							$lastUpdate = [DateTime]::Now
+							$timeAccel = ([float]$modelTime - [float]$lastModelTime) / [float]$sleepTime
+							if ($timeAccel -gt 0.75){
+								$timeAccel = [math]::Round($timeAccel)
+							}
 						}
 						$lastUpdateDelta = (([DateTime]::Now - $lastUpdate).TotalSeconds)
 						if (!$Headless) {
-							$string = "`t`t🕑 $(Spinner) Waiting for track to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds" -f ($modelTime/$trackDuration),$modelTime,$trackDuration,($stopwatch.Elapsed.TotalSeconds)
+							$string = "`t`t🕑 $(Spinner) Waiting for track to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds, x{4:N2} acceleration" -f ($modelTime/$trackDuration),$modelTime,$trackDuration,($stopwatch.Elapsed.TotalSeconds),$timeAccel
 							Overwrite $string -ForegroundColor Yellow
 						}
 						if ($modelTime -gt ($trackDuration * 2)){
@@ -411,7 +416,7 @@ try {
 						}
 						$lastModelTime = $modelTime
 						# Throttle so DCS isn't checked too often
-						sleep 1
+						sleep $sleepTime
 					}
 					if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}		
 				} finally {

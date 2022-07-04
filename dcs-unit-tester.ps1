@@ -477,6 +477,16 @@ try {
 				Write-Host "Tacview not found for $testName"
 			}
 		}
+		
+		try {
+			$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t" -Message "Waiting for DCS to return to main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
+			if ($started -eq $false) {
+				throw [TimeoutException] "DCS did not return to main menu"
+			}
+		} catch {
+			Write-Host "`t❌ $($_.ToString()), Restarting DCS" -ForegroundColor Red
+			KillDCS
+		}
 
 		$trackProgress = $trackProgress + 1
 	}

@@ -71,10 +71,10 @@ try {
 		return (GetProcessRunning -Path $GamePath)
 	}
 
-	function TeamCitySafeString($Value) {
+	function TeamCitySafeString([string] $Value) {
 		$Value = $Value.Replace("'","|'")
-		$Value = $Value.Replace("`n","|`n'")
-		$Value = $Value.Replace("`r","|`r")
+		$Value = $Value.Replace("`n","|n")
+		$Value = $Value.Replace("`r","|r")
 		$Value = $Value.Replace("|","||")
 		$Value = $Value.Replace("[","|[")
 		$Value = $Value.Replace("]","|]")
@@ -217,6 +217,7 @@ try {
 		}
 		return ($Host.UI.RawUI.WindowSize.Width - $textLen)
 	}
+	$TrackDirectory = $TrackDirectory.Replace("\","/")
 	# Gets all the tracks in the track directory that do not start with a .
 	$tracks = Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
 	$trackCount = ($tracks | Measure-Object).Count
@@ -287,7 +288,7 @@ try {
 		if ($Headless) {
 			Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']"
 			if (-not [string]::IsNullOrWhiteSpace($trackDescription)) {
-				Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
+				Write-Host "##teamcity[testMetadata testName='$testName' name='1. Description' value='$(TeamCitySafeString -Value $trackDescription)']"
 			}
 		}
 		$stopwatch.Reset();
@@ -320,7 +321,7 @@ try {
 				}
 				$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
 				if ($started -eq $false) {
-					throw [TimeoutException] "DCS did not start within $DCSStartTimeout seconds"
+					throw [TimeoutException] "DCS did not load to main menu"
 				}
 				if ($UpdateTracks) {
 					# Update scripts in the mission incase the source scripts updated
@@ -358,7 +359,7 @@ try {
 					$task = $listener.AcceptTcpClientAsync()
 					$trackStartedPredicate = { $Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0) }
 					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
-						throw [TimeoutException] "Track did not start within timeout of $TrackLoadTimeout seconds"
+						throw [TimeoutException] "Track did not finish loading"
 					}
 					$data = $task.GetAwaiter().GetResult()
 					$stream = $data.GetStream() 
@@ -423,7 +424,7 @@ try {
 				$resultSet = $false
 				# Attempt to find the unit test assersion output line
 				Write-Host "`t`t📄 Output:"
-				$output | % {
+				$output | ForEach-Object {
 					if ($_ -match '^DUT_ASSERSION=(true|false)$') {
 						$result = [Boolean]::Parse($Matches[1])
 						$resultSet = $true
@@ -431,6 +432,9 @@ try {
 						Write-Output $Matches[1]
 					} 
 					Write-Host "`t`t    $_"
+				}
+				if ($Headless) {
+					Write-Host "##teamcity[testMetadata testName='$testName' name='2. DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
 				}
 				if ($resultSet -eq $false) {
 					throw "Track did not send an assersion result, maybe crash?, assuming failed"

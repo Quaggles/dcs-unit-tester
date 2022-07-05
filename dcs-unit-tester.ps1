@@ -89,7 +89,8 @@ try {
 			[string] $Prefix,
 			[float] $Timeout = 0,
 			[scriptblock] $MessageFunction,
-			[switch] $NoWaitSpinner
+			[switch] $NoWaitSpinner,
+			[scriptblock] $RunEach
 		)
 		function ElapsedString {
 			return (([DateTime]::Now - $startTime).ToString('hh\:mm\:ss'))
@@ -102,6 +103,9 @@ try {
 				if ($CancelIf -and ((& $CancelIf) -eq $true)) {
 					Overwrite "$Prefix❌ $Message - Cancelled ($(ElapsedString))" -ForegroundColor Red
 					return $false
+				}
+				if ($RunEach) {
+					(& $RunEach)
 				}
 				if ($Timeout -gt 0 -and [DateTime]::Now -gt $waitUntil) {
 					Overwrite "$Prefix❌ $Message - Breached $Timeout second timeout)" -ForegroundColor Red
@@ -135,8 +139,7 @@ try {
 
 	function OnMenu {
 		try {
-			$lua = "return DCS.getModelTime()"
-			return ($connector.SendReceiveCommandAsync($lua).GetAwaiter().GetResult().Result -eq 0)
+			return ($connector.SendReceiveCommandAsync("return DCS.getModelTime()").GetAwaiter().GetResult().Result -eq 0)
 		} catch [TimeoutException] {
 			return $null;
 		}
@@ -148,8 +151,7 @@ try {
 
 	function IsTrackPlaying {
 		try {
-			$lua = "return DCS.isTrackPlaying()"
-			return ($connector.SendReceiveCommandAsync($lua).GetAwaiter().GetResult().Result -eq 'true')
+			return ($connector.SendReceiveCommandAsync("return DCS.isTrackPlaying()").GetAwaiter().GetResult().Result -eq 'true')
 		} catch [TimeoutException] {
 			return $null;
 		}
@@ -157,10 +159,32 @@ try {
 
 	function GetModelTime {
 		try {
-			$lua = "return DCS.getModelTime()"
-			return [float]($connector.SendReceiveCommandAsync($lua).GetAwaiter().GetResult().Result)
+			return [float]($connector.SendReceiveCommandAsync("return DCS.getModelTime()").GetAwaiter().GetResult().Result)
 		} catch [TimeoutException] {
 			return [float]-1;
+		}
+	}
+
+	function GetPause {
+		try {
+			$result = ($connector.SendReceiveCommandAsync("return DCS.getPause()").GetAwaiter().GetResult().Result)
+			if ($result -eq "true") {
+				return $true
+			} elseif ($result -eq "false") {
+				return $false
+			} else {
+				return $null;
+			}
+		} catch [TimeoutException] {
+			return $null;
+		}
+	}
+
+	function SetPause([Boolean] $Paused) {
+		try {
+			return ($connector.SendReceiveCommandAsync("return DCS.setPause($Paused)").GetAwaiter().GetResult().Result)
+		} catch [TimeoutException] {
+			return $false;
 		}
 	}
 
@@ -359,9 +383,16 @@ try {
 				
 					# Wait for an incoming connection, if no connection occurs throw an exception
 					$task = $listener.AcceptTcpClientAsync()
-					$trackStartedPredicate = { $Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) -and (GetModelTime -gt 0) }
-					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for track to start" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+					$trackStartedPredicate = { $Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) }
+					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for track to load" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
 						throw [TimeoutException] "Track did not finish loading"
+					}
+					$trackUnpausedPredicate = {
+						$paused = (GetPause)
+						return ($paused -ne $null -and $paused -eq $false -and (GetModelTime -gt 0))
+					}
+					if (-not (Wait-Until -Predicate $trackUnpausedPredicate -CancelIf { -not (GetDCSRunning) } -RunEach { SetPause -Paused $false } -Prefix "`t`t" -Message "Waiting for track to play" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+						throw [TimeoutException] "Track did not play"
 					}
 					$data = $task.GetAwaiter().GetResult()
 					$stream = $data.GetStream() 

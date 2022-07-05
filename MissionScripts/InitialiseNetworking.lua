@@ -1,7 +1,9 @@
+-- Now initialised in MissionScripting.lua
+--[[
 package.path  = package.path..";.\\LuaSocket\\?.lua"
 package.cpath = package.cpath..";.\\LuaSocket\\?.dll"
-
-local socket = require("socket")
+socket = require("socket")
+]]
 local connection = socket.connect("localhost", 1337)
 local dutExportSocket
 if connection ~= nil then

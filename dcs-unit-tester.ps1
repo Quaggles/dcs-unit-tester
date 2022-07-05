@@ -312,7 +312,7 @@ try {
 					Write-Host "`t`t❌ Failed to get track description: $_" -F Red
 				}
 				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
-					Write-Host "##teamcity[testMetadata testName='$testName' name='1. Description' value='$(TeamCitySafeString -Value $trackDescription)']"
+					Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
 				}
 
 				# Ensure DCS is started and ready to go
@@ -418,7 +418,7 @@ try {
 						# Throttle so DCS isn't checked too often
 						sleep $sleepTime
 					}
-					if (!$Headless) {Overwrite "`t`t✅ Track Finished" -ForegroundColor Green}		
+					if (!$Headless) {Overwrite "`t`t✅ Track Finished ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green}		
 				} finally {
 					# Close TCP connection and stop listening
 					if ($stream) { $stream.close() }
@@ -441,7 +441,7 @@ try {
 					Write-Host "`t`t    $_"
 				}
 				if ($Headless) {
-					Write-Host "##teamcity[testMetadata testName='$testName' name='2. DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
+					Write-Host "##teamcity[testMetadata testName='$testName' name='DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
 				}
 				if ($resultSet -eq $false) {
 					throw "Track did not send an assersion result, maybe crash?, assuming failed"
@@ -463,10 +463,10 @@ try {
 		}
 		# Export result
 		if ($resultSet -eq $true -and $result -eq $TRUE) {
-			Write-Host "`t✅ Test ($trackProgress/$trackCount) Passed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Green -BackgroundColor Black
+			Write-Host "`t✅ Test ($trackProgress/$trackCount) Passed after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
 			$successCount = $successCount + 1
 		} else {
-			Write-Host "`t❌ Test ($trackProgress/$trackCount) Failed after $($stopwatch.Elapsed.ToString('hh\:mm\:ss'))" -ForegroundColor Red -BackgroundColor Black
+			Write-Host "`t❌ Test ($trackProgress/$trackCount) Failed after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
 			if ($Headless) { Write-Host "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }

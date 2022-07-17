@@ -14,7 +14,8 @@ param (
 	[float] $TrackLoadTimeout = 240,
 	[float] $TrackPingTimeout = 30,
 	[int] $RetryLimit = 2,
-	[int] $RerunCount = 1
+	[int] $RerunCount = 1,
+	[int] $TimeAcceleration
 )
 $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
@@ -145,6 +146,7 @@ try {
 		}
 	}
 	function KillDCS {
+		$dcsPid = $null
 		Stop-Process -Name (GetProcessFromPath($GamePath)) -Force -ErrorAction SilentlyContinue
 		sleep 10
 	}
@@ -342,8 +344,10 @@ try {
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
 					Write-Host "`t`t✅ Starting DCS" -F Green
-					Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest"
+					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest" -PassThru).Id
 					sleep 5
+				} else { # Fallback if we didn't start the process
+					$dcsPid = (GetDCSRunning).Id
 				}
 				$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
 				if ($started -eq $false) {
@@ -421,6 +425,18 @@ try {
 						}
 					}
 					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
+					
+					# Use AutoHotkey script to tell DCS to increase time acceleration
+					if ($dcsPid -and $TimeAcceleration -and -not $InvertAssersion) {
+						Write-Host "`t`tℹ️ Setting Time Acceleration to $($TimeAcceleration)x"
+						# Argument 1 is PID, argument 2 is delay in ms
+						$sendKeysArguments = @("$dcsPid","100")
+						# ^z = Ctrl + Z
+						for ($i = 0; $i -lt ($TimeAcceleration - 1); $i++) {
+							$sendKeysArguments += "^z"
+						}
+						Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments
+					}
 
 					# Wait for track to end loop
 					$lastUpdate = [DateTime]::Now

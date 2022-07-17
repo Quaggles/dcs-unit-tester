@@ -8,12 +8,12 @@ SetTitleMatchMode, slow
 
 targetWindow = ahk_pid %1%
 delay = %2%
+SetKeyDelay %delay% ; Avoid delays between keystrokes.
+WinActivate, %targetWindow%
+WinWaitActive, %targetWindow%
 for n, param in A_Args {
     IfGreater, n, 2
     {
-        WinActivate, %targetWindow%
-        WinWaitActive, %targetWindow%
         Send,%param%
-        sleep, %delay%
     }
 }

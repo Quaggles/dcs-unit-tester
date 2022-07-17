@@ -15,7 +15,8 @@ param (
 	[float] $TrackPingTimeout = 30,
 	[int] $RetryLimit = 2,
 	[int] $RerunCount = 1,
-	[int] $TimeAcceleration
+	[int] $TimeAcceleration,
+	[int] $SetKeyDelay = 0
 )
 $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
@@ -430,7 +431,7 @@ try {
 					if ($dcsPid -and $TimeAcceleration -and -not $InvertAssersion) {
 						Write-Host "`t`tℹ️ Setting Time Acceleration to $($TimeAcceleration)x"
 						# Argument 1 is PID, argument 2 is delay in ms
-						$sendKeysArguments = @("$dcsPid","100")
+						$sendKeysArguments = @("$dcsPid",$TimeAccelerationDelay)
 						# ^z = Ctrl + Z
 						for ($i = 0; $i -lt ($TimeAcceleration - 1); $i++) {
 							$sendKeysArguments += "^z"

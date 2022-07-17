@@ -431,7 +431,7 @@ try {
 					if ($dcsPid -and $TimeAcceleration -and -not $InvertAssersion) {
 						Write-Host "`t`tℹ️ Setting Time Acceleration to $($TimeAcceleration)x"
 						# Argument 1 is PID, argument 2 is delay in ms
-						$sendKeysArguments = @("$dcsPid",$TimeAccelerationDelay)
+						$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
 						# ^z = Ctrl + Z
 						for ($i = 0; $i -lt ($TimeAcceleration - 1); $i++) {
 							$sendKeysArguments += "^z"

@@ -262,6 +262,17 @@ try {
 		# Get track information
 		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
+		$config = $null
+		$configPathTemplate = Join-Path -Path (split-path $_.FullName -Parent) -ChildPath "/.base.json"
+		$configPath = [System.IO.Path]::ChangeExtension($_.FullName, ".json")
+		if (Test-Path -Path $configPath) {
+			Write-Host "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPath))"
+			$config = ConvertFrom-Json (Get-Content -Path $configPath -Raw)
+		} elseif (Test-Path -Path $configPathTemplate) {
+			Write-Host "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPathTemplate))"
+			$config = ConvertFrom-Json (Get-Content -Path $configPathTemplate -Raw)
+		}
+
 		$testName = $(split-path $_.FullName -leafBase)
 		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
 
@@ -308,16 +319,31 @@ try {
 		$stopwatch.Start();
 		$runCount = 1
 		$failureCount = 0
+
+		function SetConfigVar([PSCustomObject] $Config, $OriginalValue, [string] $VariableName) {
+			if (-not $Config.PSObject.Properties) { return $OriginalValue }
+			$prop = $Config.PSObject.Properties[$VariableName]
+			if ($prop -and $prop.Value) {
+				Write-Host "`tℹ️ Config: $VariableName = $($prop.Value)"
+				return $prop.Value
+			} else {
+				return $OriginalValue
+			}
+		}
+		$localRerunCount = SetConfigVar $config $RerunCount "RerunCount"
+		$localTimeAcceleration = SetConfigVar $config $TimeAcceleration "TimeAcceleration"
+		$localRetryLimit = SetConfigVar $config $RetryLimit "RetryLimit"
+		$localReseed = SetConfigVar $config $Reseed "Reseed"
 		# Track retry loop
-		while (($runCount -le $RerunCount) -and ($failureCount -le $RetryLimit)) {
+		while (($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
 			try {
 				$progressMessage = "`tTrack ($trackProgress/$trackCount)"
-				if ($RerunCount -gt 1) {
-					$progressMessage += ", Run ($runCount/$RerunCount)"
+				if ($localRerunCount -gt 1) {
+					$progressMessage += ", Run ($runCount/$localRerunCount)"
 				}
 				$progressMessage += " `"$relativeTestPath`""
-				if ($RetryLimit -gt 0 -and $failureCount -gt 0) {
-					$progressMessage += ", failed attempts ($failureCount/$RetryLimit)"
+				if ($localRetryLimit -gt 0 -and $failureCount -gt 0) {
+					$progressMessage += ", failed attempts ($failureCount/$localRetryLimit)"
 				}
 				# Progress report
 				if ($Headless) {
@@ -361,7 +387,7 @@ try {
 					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
 					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 				}
-				if ($Reseed) {
+				if ($localReseed) {
 					# Update track seed in the mission to make it random
 					$temp = New-TemporaryFile
 					try {
@@ -428,12 +454,12 @@ try {
 					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
 					
 					# Use AutoHotkey script to tell DCS to increase time acceleration
-					if ($dcsPid -and $TimeAcceleration -and -not $InvertAssersion) {
-						Write-Host "`t`tℹ️ Setting Time Acceleration to $($TimeAcceleration)x"
+					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssersion) {
+						Write-Host "`t`tℹ️ Setting Time Acceleration to $($localTimeAcceleration)x"
 						# Argument 1 is PID, argument 2 is delay in ms
 						$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
 						# ^z = Ctrl + Z
-						for ($i = 0; $i -lt ($TimeAcceleration - 1); $i++) {
+						for ($i = 0; $i -lt ($localTimeAcceleration - 1); $i++) {
 							$sendKeysArguments += "^z"
 						}
 						Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments
@@ -498,7 +524,7 @@ try {
 			} catch {
 				$resultSet = $false
 				$result = $false
-				Write-Host "`n`t`t❌ Error on attempt ($failureCount/$RetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
+				Write-Host "`n`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
 				KillDCS
 				$failureCount = $failureCount + 1
 			}

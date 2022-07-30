@@ -41,7 +41,8 @@ BEGIN {
 }
 PROCESS {
     Using-Object ($zip = [System.IO.Compression.ZipFile]::Open($Archive, [System.IO.Compression.ZipArchiveMode]::Update)) {
-        $entry = $zip.GetEntry($Destination);
+        $entry = $zip.GetEntry($Destination)
+        $relativeArchivePath = $([Path]::GetRelativePath($pwd, $Archive))
         if ($entry) {
             if ($PSCmdlet.ShouldProcess($Archive)) {
                 $entry.Delete();
@@ -54,9 +55,9 @@ PROCESS {
                     $stream.Write([System.IO.File]::ReadAllText($SourceFile))
                 }
             }
-            Write-Host "Replaced entry ""$Destination"" in archive ""$Archive"""
+            Write-Host """$relativeArchivePath"" => ""$Destination"" - Replaced entry in archive"
         } else {
-            Write-Host "No existing entry to replace at ""$Destination"" in archive ""$Archive"""
+            Write-Host """$relativeArchivePath"" => ""$Destination"" - No existing entry to replace at in archive"
         }
     }
 }

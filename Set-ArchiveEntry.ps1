@@ -57,7 +57,7 @@ PROCESS {
             }
             Write-Host """$relativeArchivePath"" => ""$Destination"" - Replaced entry in archive"
         } else {
-            Write-Host """$relativeArchivePath"" => ""$Destination"" - No existing entry to replace at in archive"
+            Write-Host """$relativeArchivePath"" => ""$Destination"" - No existing entry to replace in archive"
         }
     }
 }

@@ -15,6 +15,9 @@ param (
 	[float] $TrackPingTimeout = 30,
 	[int] $RetryLimit = 2,
 	[int] $RerunCount = 1,
+	[ValidateSet("All","Majority","Any","Last")]
+	[string] $PassMode = "All",
+	[Boolean] $PassModeShortCircuit = $false,
 	[int] $TimeAcceleration,
 	[int] $SetKeyDelay = 0
 )
@@ -250,7 +253,7 @@ try {
 	$trackCount = ($tracks | Measure-Object).Count
 	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
 	$trackProgress = 1
-	$successCount = 0
+	$trackSuccessCount = 0
 	$stopwatch =  [stopwatch]::StartNew()
 	$globalStopwatch =  [stopwatch]::StartNew()
 
@@ -319,6 +322,7 @@ try {
 		$stopwatch.Start();
 		$runCount = 1
 		$failureCount = 0
+		$successCount = 0
 
 		function SetConfigVar([PSCustomObject] $Config, $OriginalValue, [string] $VariableName) {
 			if (-not $Config.PSObject.Properties) { return $OriginalValue }
@@ -334,6 +338,7 @@ try {
 		$localTimeAcceleration = SetConfigVar $config $TimeAcceleration "TimeAcceleration"
 		$localRetryLimit = SetConfigVar $config $RetryLimit "RetryLimit"
 		$localReseed = SetConfigVar $config $Reseed "Reseed"
+		$localPassMode = SetConfigVar $config $PassMode "PassMode"
 		# Track retry loop
 		while (($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
 			try {
@@ -528,19 +533,43 @@ try {
 				KillDCS
 				$failureCount = $failureCount + 1
 			}
+			if ($InvertAssersion) {
+				Write-Host "`t📄 Inverting Result was $result now $(!$result)"
+				$result = (!$result)
+			}
+			if ($resultSet -eq $true) {
+				if ($result -eq $TRUE){
+					$successCount = $successCount + 1
+					if ($PassModeShortCircuit -and $localPassMode -eq "Any" -or ($localPassMode -eq "Majority" -and $successCount -gt ($localRerunCount/2))) {
+						Write-Host "`t`t Skipping remaining reruns because PassMode:$localPassMode has determined the final result via short circuit"
+						break
+					}
+				} else {
+					if ($PassModeShortCircuit -and $localPassMode -eq "All") {
+						Write-Host "`t`t Skipping remaining reruns because PassMode:$localPassMode has determined the final result via short circuit"
+						break
+					}
+				}
+			}
 			if ($output) { $output.Clear() }
 		}
-		
-		if ($InvertAssersion) {
-			Write-Host "`t📄 Inverting Result was $result now $(!$result)"
-			$result = (!$result)
-		}
+
 		# Export result
-		if ($resultSet -eq $true -and $result -eq $TRUE) {
-			Write-Host "`t✅ Test ($trackProgress/$trackCount) Passed after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
-			$successCount = $successCount + 1
+		if ($localPassMode -eq "All") {
+			$result = ($successCount -eq $localRerunCount)
+		} elseif ($localPassMode -eq "Majority") {
+			$result = ($successCount -gt ($localRerunCount/2))
+		} elseif ($localPassMode -eq "Any") {
+			$result = ($successCount -gt 0)
 		} else {
-			Write-Host "`t❌ Test ($trackProgress/$trackCount) Failed after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
+			$result = ($resultSet -eq $true -and $result -eq $TRUE)
+		}
+		$passMessage = "PassMode:$localPassMode [$successCount/$localRerunCount] {0:P0}" -f ($successCount/$localRerunCount)
+		if ($result -eq $TRUE) {
+			Write-Host "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
+			$trackSuccessCount = $trackSuccessCount + 1
+		} else {
+			Write-Host "`t❌ Test ($trackProgress/$trackCount) Failed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
 			if ($Headless) { Write-Host "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
@@ -587,10 +616,10 @@ try {
 		}
 	}
 	Write-Host "Finished, passed tests: " -NoNewline
-	if ($successCount -eq $trackCount){
-		Write-Host "✅ [$successCount/$trackCount]" -F Green -B Black -NoNewline
+	if ($trackSuccessCount -eq $trackCount){
+		Write-Host "✅ [$trackSuccessCount/$trackCount]" -F Green -B Black -NoNewline
 	} else {
-		Write-Host "❌ [$successCount/$trackCount]" -F Red -B Black -NoNewline
+		Write-Host "❌ [$trackSuccessCount/$trackCount]" -F Red -B Black -NoNewline
 	}
 	Write-Host " in $($globalStopwatch.Elapsed.ToString('hh\:mm\:ss'))";
 	if (-not $Headless -and (Get-ExecutionPolicy -Scope Process) -eq 'Bypass'){

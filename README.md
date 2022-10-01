@@ -7,7 +7,7 @@ A powershell script that handles opening DCS and automatically running through u
 
 Video overview of PowerShell script:
 
-[![IMAGE ALT TEXT](http://img.youtube.com/vi/NL5GRlY3plM/0.jpg)](http://www.youtube.com/watch?v=NL5GRlY3plM "DCS Unit Tester Overview")
+[![IMAGE ALT TEXT](https://user-images.githubusercontent.com/8382945/193401137-bde808d0-b5de-43f6-b094-60232379179d.png)](http://www.youtube.com/watch?v=NL5GRlY3plM "DCS Unit Tester Overview")
 
 ### TeamCity WebGUI
 

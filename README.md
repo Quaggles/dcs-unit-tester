@@ -5,9 +5,18 @@ A powershell script that handles opening DCS and automatically running through u
 
 ![image](https://user-images.githubusercontent.com/8382945/113413719-a0949380-93fe-11eb-9859-a739065cb44a.png)
 
-Overview YouTube Video:
+Video overview of PowerShell script:
 
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/NL5GRlY3plM/0.jpg)](http://www.youtube.com/watch?v=NL5GRlY3plM "DCS Unit Tester Overview")
+
+### TeamCity WebGUI
+
+I've set up a TeamCity continuous integration site which allows for easy viewing of test results that have been run on my server it can be accessed at: https://teamcity.home.ryanquagliata.com Tests run on Open Beta branch are viewable publicly by clicking "Log in as guest"
+
+Video overview of WebGUI:
+
+[![IMAGE ALT TEXT](https://user-images.githubusercontent.com/8382945/193400826-ae53bec3-602f-4ec7-a599-c2d7c0282f2b.png)](https://www.youtube.com/watch?v=yAm4zmELh5U "
+DCS Unit Tester WebGUI Overview")
 
 ## What is it?
 
@@ -57,6 +66,9 @@ To report a result use an `OnMissionEnd` trigger to call the global function `As
 ![image](https://user-images.githubusercontent.com/8382945/113410977-fd408000-93f7-11eb-8029-e9f445c4cbe9.png)
 
 Alternatively you can call `Do Script File` on `Scripts/OnMissionEnd.lua` located in this repository, this script asserts true if every red unit has taken some damage and will call `Output()` showing any units who survived and how much health they have
+
+Set a mission description to explain what your test does and what the success condition is, this text is reported in the testing tool and on the WebGUI:
+![image](https://user-images.githubusercontent.com/8382945/193400705-4c4c32e4-59e2-4782-bd57-49fdbda2ab59.png)
 
 ## Setup
 

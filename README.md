@@ -68,6 +68,7 @@ To report a result use an `OnMissionEnd` trigger to call the global function `As
 Alternatively you can call `Do Script File` on `Scripts/OnMissionEnd.lua` located in this repository, this script asserts true if every red unit has taken some damage and will call `Output()` showing any units who survived and how much health they have
 
 Set a mission description to explain what your test does and what the success condition is, this text is reported in the testing tool and on the WebGUI:
+
 ![image](https://user-images.githubusercontent.com/8382945/193400705-4c4c32e4-59e2-4782-bd57-49fdbda2ab59.png)
 
 ## Setup

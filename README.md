@@ -60,27 +60,29 @@ Alternatively you can call `Do Script File` on `Scripts/OnMissionEnd.lua` locate
 
 ## Setup
 
-0. Clone the project into a folder `git clone https://github.com/Quaggles/dcs-unit-tester.git --recurse-submodules` or download the project zip from [here](https://github.com/Quaggles/dcs-unit-tester/archive/refs/heads/master.zip)
+### 0. Clone the project into a folder
 
-1. Configure a DCS profile for the tester
+`git clone https://github.com/Quaggles/dcs-unit-tester.git --recurse-submodules` or download the project zip from [here](https://github.com/Quaggles/dcs-unit-tester/archive/refs/heads/master.zip)
+
+### 1. Configure a DCS profile for the tester
 
 Put the `[Project Folder]\Saved Games\DCS.unittest` folder in your Saved Games folder next to your `DCS` and `DCS.openbeta` folders, this is a profile with an autoexec.cfg file that will run the tests in DCS without rendering anything and in windowed mode, this allows you to keep it in the background and work on other things.
 
 It also contains `DCS-LuaConnector-hook.lua` from my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) system which allows the Powershell script to talk to the DCS Lua environment directly and determine if it's waiting on the menu and to tell it to load tracks.
 
-2. Get some tests
+### 2. Get some tests
 
 [Follow the guide](https://github.com/Quaggles/dcs-unit-tester#how-to-create-a-test)
 
 I've also created 81 tests for the F/A-18C Hornet which are [available here](https://github.com/Quaggles/dcs-unit-tests), it covers every weapon system available for the aircraft. It also tests where necessary every variant of every weapon when they have different racks, for example there used to be a bug where the AIM-9X on a single rail would work different than when loaded on a double rail, this avoids missing those peculiarities.
 
-3. Install the DCS Unit Tester Mod in OVGME
+### 3. Install the DCS Unit Tester Mod in OVGME
 
 [Get OVGME from here and configure it](https://wiki.hoggitworld.com/view/OVGME)
 
-Install the mod from this repository: `DCS Unit Tester Mod - Disable SSE and Briefing.zip`
+Install the mod from this repository: `DCS Unit Tester Mod - Enable SSE LuaSocket.zip`
 
-This does two things, disables the safe scripting environment to allow the mission track to talk over a TCP connection to the powershell script and also mods the game to skip any briefings that would show up at the start of a track and wait for user input
+This mod whitelists the LuaSocket library in the Safe Scripting Environment to allow the mission track to talk over a TCP connection to the powershell script, it previously handled disabling the briefing but that is now handled automatically by the tester script calling `DCS.setPause(false)`
 
 Remember the implications of disabling the Safe Scripting Environment:
 > This makes available some unsecure functions. 
@@ -88,13 +90,15 @@ Remember the implications of disabling the Safe Scripting Environment:
 
 Because of this I recommend only enabling the mod when testing or developing missions
 
-4. Run!
+### 4. Run!
 
 [Powershell 7 is required](https://github.com/PowerShell/PowerShell/releases/latest) since I use my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) to talk to DCS and only Powershell 7 and higher can load .net 5.0 libraries
 
 Run the script like so: `dcs-unit-tester.ps1 -TrackDirectory "C:/Path/To/Directory/Containing/Tracks"`, the script should automatically find your DCS installation through the registry but if you want to use a different one you can use the `-GamePath` argument to provide the path <b>To your DCS.exe specifically</b> don't just point it to the DCS folder
 
-5. Observe
+For a full list of parameters read: [PowerShell Parameters](#powershell-parameters)
+
+### 5. Observe
 
 If you want have the game render to watch what it's doing go to `Saved Games\DCS.unittest\Config\autoexec.cfg` and comment out the line like so
 ```lua
@@ -104,6 +108,27 @@ Otherwise leave it set uncommented to save your power bill
 
 Once the script has finished you should see a lot of terminal output showing the results of each test like so:
 ![image](https://user-images.githubusercontent.com/8382945/113414119-932bd900-93ff-11eb-8aad-a445ad953112.png)
+
+## PowerShell Parameters
+Parameter Name|Default Value|Description
+--|--|--
+GamePath|`HKCU\SOFTWARE\Eagle Dynamics\DCS World\Path`|Path to the game executable e.g. `C:/DCS World/bin/dcs.exe`, overrides the one found in the registry
+TrackDirectory|Working Directory|Path to the directory containing tracks
+QuitDcsOnFinish|false|Sets if the tester quits DCS when tests are complete
+UpdateTracks|false|If enabled updates scripts in the track file with those from [MissionScripts/](/MissionScripts/), useful for keeping the networking scripts up to date across hundreds of track files
+Reseed|false|If enabled regenerates the tracks RNG seed, can be used for testing things with randomness like AI decision making or weapon CEP
+Headless|false|If enabled outputs TeamCity service messages
+DCSStartTimeout|360|Time in seconds the tester will wait for DCS to start before reporting a failure
+TrackLoadTimeout|240|Time in seconds the tester will wait for the track to load before reporting a failure
+TrackPingTimeout|30|Time in seconds the tester will wait between responses from the track file before reporting a failure (Detects crashes/freezes)
+RetryLimit|2|How many times a track will be retried after a DCS failure (Crash\Fail to load\track freeze)
+RerunCount|1|How many times the track will be run, used in combination with PassMode below
+PassMode|All|Possible values:<br><b>All</b>: All runs of the test must pass for the test to report success<br><b>Majority</b>: Greater than 50% test runs must pass for the test to report success<br><b>Any</b>: At least 1 test run must pass for the test to report success<br><b>Last</b>: The result from the final test run is reported
+PassModeShortCircuit|false|If enabled prevents rerunning a test more times than needed once the PassMode has been satisfied, for example with `PassMode:All` if a single test fails no more are run and the result is reported as failed immediately, helps cut down on test execution time
+TimeAcceleration|1|Sets the time acceleration in each track to reduce runtime, done using AutoHotKey which sends presses of `Ctrl + Z` once the track is playing, set this to a sane number for your hardware, for complex tests above 8x on slow computers can cause track desync. This parameter overrides any time acceleration that was recorded in the track
+InvertAssersion|false|If enabled tests for false negatives (A test reports success if nothing happened), will end the tests after 1 second and fail them if they report true
+
+To override these parameters on a per test basis read: [Local track config files](#local-track-config-files)
 
 ## CreateMissionsFromTemplates.ps1
 
@@ -136,9 +161,48 @@ The above example will result in 3 .trk files being created with the player havi
 
 Run the script and it will recursively search that directly and create the variants of each .trk file: `.\CreateMissionsFromTemplates.ps1 "C:\Users\Quaggles\Git\DCS\dcs-unit-tests\FA-18C"`
 
+## Local track config files
+
+Certain PowerShell parameters can be overridden on a per-test basis
+
+The priority orders for parameters is as follows:
+1. Local Config (Overrides all)
+2. Powershell Params
+3. Track File (The time acceleration that is built into the recording)
+
+Local Config files are written in JSON and placed next to the .trk file you wish to customise, for example:
+
+* Named `.base.json` if you want it to apply to all tests in this directory
+
+* Named `AIM-7F Cheek.json` if you wanted to apply to a specific test in this directory
+
+In this example the RerunCount is overridden to `10` and PassMode is set to `All`, this can be useful for flaky tests as the tester will ensure that it passes 10 runs, values set to `null` are not overridden
+```json
+{
+	"RerunCount": 10,
+	"PassMode": "All",
+	"TimeAcceleration": null,
+	"RetryLimit": null,
+	"Reseed": null,
+}
+```
+You could use something like this if you have a very long running test that you know will run stable with a high time acceleration set, or you could force it to 1x if you know the track can't handle time acceleration
+```json
+{
+	"RerunCount": null,
+	"PassMode": null,
+	"TimeAcceleration": 16,
+	"RetryLimit": null,
+	"Reseed": null,
+}
+```
 ## FAQ
 
 ### I have a mission script error popup
 ![image](https://user-images.githubusercontent.com/8382945/113410741-7d1a1a80-93f7-11eb-85c3-fdd738a049b7.png)
 
-This probably means you haven't installed the mod `DCS Unit Tester Mod - Disable SSE and Briefing.zip` using OVGME, the mission will give you errors if it's not installed
+This probably means you haven't installed the mod `DCS Unit Tester Mod - Enable SSE LuaSocket.zip` using OVGME, the mission will give you errors if it's not installed
+
+### Testing mission assersions live
+
+You can run [Receive-TCPMessage.ps1](/Receive-TCPMessage.ps1) with PowerShell while recording your track or running the tracks manually to get a live output of what your test is sending without having to run the full tester

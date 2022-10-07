@@ -81,8 +81,6 @@ Set a mission description to explain what your test does and what the success co
 
 Put the `[Project Folder]\Saved Games\DCS.unittest` folder in your Saved Games folder next to your `DCS` and `DCS.openbeta` folders, this is a profile with an autoexec.cfg file that will run the tests in DCS without rendering anything and in windowed mode, this allows you to keep it in the background and work on other things.
 
-It also contains `DCS-LuaConnector-hook.lua` from my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) system which allows the Powershell script to talk to the DCS Lua environment directly and determine if it's waiting on the menu and to tell it to load tracks.
-
 ### 2. Get some tests
 
 [Follow the guide](https://github.com/Quaggles/dcs-unit-tester#how-to-create-a-test)
@@ -93,9 +91,11 @@ I've also created 81 tests for the F/A-18C Hornet which are [available here](htt
 
 [Get OVGME from here and configure it](https://wiki.hoggitworld.com/view/OVGME)
 
-Install the mod from this repository: `DCS Unit Tester Mod - Enable SSE LuaSocket.zip`
+Install the mod from this repository: [DCS Unit Tester Mod - Enable SSE LuaSocket](/DCS%20Unit%20Tester%20Mod%20-%20Enable%20SSE%20LuaSocket.zip)
 
 This mod whitelists the LuaSocket library in the Safe Scripting Environment to allow the mission track to talk over a TCP connection to the powershell script, it previously handled disabling the briefing but that is now handled automatically by the tester script calling `DCS.setPause(false)`
+
+It also contains `DCS-LuaConnector-hook.lua` from my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) system which allows the Powershell script to talk to the DCS Lua environment directly and determine if it's waiting on the menu and to tell it to load tracks.
 
 Remember the implications of disabling the Safe Scripting Environment:
 > This makes available some unsecure functions. 

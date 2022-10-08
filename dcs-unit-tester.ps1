@@ -247,6 +247,11 @@ try {
 		}
 		return ($Host.UI.RawUI.WindowSize.Width - $textLen)
 	}
+	$tacviewDirectory = "~\Documents\Tacview"
+	# Clear tacview folder
+	if ($Headless -and (Test-Path $tacviewDirectory)) {
+		Get-ChildItem -Path $tacviewDirectory | Remove-Item
+	}
 	$TrackDirectory = $TrackDirectory.Replace("\","/")
 	# Gets all the tracks in the track directory that do not start with a .
 	$tracks = Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
@@ -575,7 +580,6 @@ try {
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 
 		# Record tacview artifact
-		$tacviewDirectory = "~\Documents\Tacview"
 		if ($Headless -and (Test-Path $tacviewDirectory)) {
 			$tacviewPath = gci "$tacviewDirectory\*DCS-$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
 			if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {

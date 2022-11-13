@@ -83,7 +83,6 @@ try {
 		$Value = $Value.Replace("`r","|r")
 		$Value = $Value.Replace("[","|[")
 		$Value = $Value.Replace("]","|]")
-		$Value = $Value.Replace(",","|,")
 		return $Value
 	}
 

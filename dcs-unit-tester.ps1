@@ -77,12 +77,13 @@ try {
 	}
 
 	function TeamCitySafeString([string] $Value) {
+		$Value = $Value.Replace("|","||")
 		$Value = $Value.Replace("'","|'")
 		$Value = $Value.Replace("`n","|n")
 		$Value = $Value.Replace("`r","|r")
-		$Value = $Value.Replace("|","||")
 		$Value = $Value.Replace("[","|[")
 		$Value = $Value.Replace("]","|]")
+		$Value = $Value.Replace(",","|,")
 		return $Value
 	}
 
@@ -586,7 +587,7 @@ try {
 				Write-Host "Tacview found for $testName at $tacviewPath"
 				Write-Host "##teamcity[publishArtifacts '$tacviewPath']"
 				$artifactPath = split-path $tacviewPath -leaf
-				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$artifactPath']"
+				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
 			} else {
 				Write-Host "Tacview not found for $testName"
 			}

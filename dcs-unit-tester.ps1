@@ -21,6 +21,9 @@ param (
 	[int] $TimeAcceleration,
 	[int] $SetKeyDelay = 0
 )
+
+class SkipTestException : Exception { }
+
 $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
@@ -254,9 +257,15 @@ try {
 	}
 	$TrackDirectory = $TrackDirectory.Replace("\","/")
 	# Gets all the tracks in the track directory that do not start with a .
-	$tracks = Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.'))}
+	# Load Test tracks must be run first
+	$loadTestTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and ($_.Name.StartsWith('LoadTest.'))})
+	# Regular tests are run last
+	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.')) -and (-not $_.Name.StartsWith('LoadTest.'))})
+	$tracks = $loadTestTracks + $normalTracks
 	$trackCount = ($tracks | Measure-Object).Count
 	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
+	# Stores which modules passed the load test
+	$loadableModules = @{}
 	$trackProgress = 1
 	$trackSuccessCount = 0
 	$stopwatch =  [stopwatch]::StartNew()
@@ -378,6 +387,24 @@ try {
 					Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
 				}
 
+				# Retrieve player aircraft from track
+				$playerAircraftType = $null
+				try {
+					$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
+					if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
+						throw "Player aircraft type could not be retrieved"
+					}
+					Write-Host "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
+				} catch {
+					Write-Host "`t`t❌ Failed to get player aircraft type: $_" -F Red
+				}
+				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
+					Write-Host "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
+				}
+
+				# Determine if track is a LoadTest
+				$isLoadTest = $_.Name.StartsWith("LoadTest.")
+
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
 					Write-Host "`t`t✅ Starting DCS" -F Green
@@ -413,9 +440,13 @@ try {
 				}
 
 				try {
+					$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
+					# Skip test if load test failed
+					if (-not $isLoadTest -and $loadableModules[$playerAircraftType] -eq $false) {
+						throw [SkipTestException]::new()
+					}
 					Write-Host "`t`t✅ Commanding DCS to load track" -F Green
 					LoadTrack -TrackPath $_.FullName
-					$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
 
 					# Set up endpoint and start listening
 					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
@@ -503,6 +534,9 @@ try {
 						sleep $sleepTime
 					}
 					if (!$Headless) {Overwrite "`t`t✅ Track Finished ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green}		
+				} catch [SkipTestException] {
+					$output.Add("Skipped test as aircraft load test failed")
+					$output.Add("DUT_ASSERSION=false")
 				} finally {
 					# Close TCP connection and stop listening
 					if ($stream) { $stream.close() }
@@ -576,6 +610,15 @@ try {
 		} else {
 			Write-Host "`t❌ Test ($trackProgress/$trackCount) Failed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
 			if ($Headless) { Write-Host "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
+		}
+		# Record the load test result in a dictionary
+		if ($isLoadTest) {
+			if ($result){
+				Write-Host "`t✅ Load test for $playerAircraftType set to $result" -ForegroundColor Green
+			} else {
+				Write-Host "`t❌ Load test for $playerAircraftType set to $result" -ForegroundColor Red
+			}
+			$loadableModules[$playerAircraftType] = $result
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 

@@ -398,7 +398,7 @@ try {
 				} catch {
 					Write-Host "`t`t❌ Failed to get player aircraft type: $_" -F Red
 				}
-				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
+				if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
 					Write-Host "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
 				}
 

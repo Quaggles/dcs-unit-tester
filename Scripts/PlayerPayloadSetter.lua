@@ -84,7 +84,39 @@ function PropertySetter(payload)
     end
 end
 
+function UnitTypeSetter(unitType)
+    for coalitionName, coalition in pairs(mission.coalition) do
+        for _, country in ipairs(coalition.country) do
+            if country.helicopter ~= nil then
+                -- Skip if no helicopters
+                for _, groups in pairs(country.helicopter) do
+                    for _, group in ipairs(groups) do
+                        for _, unit in ipairs(group.units) do
+                            if unit.skill == "Player" then
+                                unit.type = unitType
+                            end
+                        end
+                    end
+                end
+            end
+            if country.plane ~= nil then
+                -- Skip if no planes
+                for _, groups in pairs(country.plane) do
+                    for _, group in ipairs(groups) do
+                        for _, unit in ipairs(group.units) do
+                            if unit.skill == "Player" then
+                                unit.type = unitType
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 for _, file in pairs(missionEditor.recursiveDir(searchDirectory, nil, false)) do
+    -- Generate payload variants
     if file:match('.base.trk$') then
         local parentPath = GetParentPath(file)
         local payloadPath = ""
@@ -101,6 +133,35 @@ for _, file in pairs(missionEditor.recursiveDir(searchDirectory, nil, false)) do
             PropertySetter(v)
             MissionEditor.SerializeTo(tempDir, 'mission', mission)
             local newFileName = k..".trk"
+            MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
+        end
+        missionEditor.Clean(tempDir)
+    end
+    -- Generate Load Tests
+    if file:match('.base.aircraft.trk$') then
+        local parentPath = GetParentPath(file)
+        if (FileExists(parentPath.."/PlayableAircraftTypes.lua")) then
+            dofile(parentPath.."/PlayableAircraftTypes.lua")
+        end
+        tempDir = missionEditor.Open(file)
+        for k,v in pairs(types) do
+            UnitTypeSetter(v)
+            MissionEditor.SerializeTo(tempDir, 'mission', mission)
+            local newFileName = "LoadTest."..v..".trk"
+            MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
+        end
+        missionEditor.Clean(tempDir)
+    end
+    if file:match('.base.helicopter.trk$') then
+        local parentPath = GetParentPath(file)
+        if (FileExists(parentPath.."/PlayableHelicoptersTypes.lua")) then
+            dofile(parentPath.."/PlayableHelicoptersTypes.lua")
+        end
+        tempDir = missionEditor.Open(file)
+        for k,v in pairs(types) do
+            UnitTypeSetter(v)
+            MissionEditor.SerializeTo(tempDir, 'mission', mission)
+            local newFileName = "LoadTest."..v..".trk"
             MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
         end
         missionEditor.Clean(tempDir)

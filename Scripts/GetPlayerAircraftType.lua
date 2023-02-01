@@ -117,7 +117,7 @@ function getMissionPlayerAircraft(a_fileName)
                     for _, group in ipairs(groups) do
                         for _, unit in ipairs(group.units) do
                             if unit.skill == "Player" then
-                                return unit.Type
+                                return unit.type
                             end
                         end
                     end

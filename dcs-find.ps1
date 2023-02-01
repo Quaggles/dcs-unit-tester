@@ -1,12 +1,13 @@
 param(
-    [switch] $GetExecutable
+    [switch] $GetExecutable,
+    [string] $ExecutableSubpath = "bin/DCS.exe"
 )
 $ErrorActionPreference = "Stop"
 try {
     $regPath = "Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World"
     $dcsPath = Get-ItemPropertyValue -Path $regPath -Name path
     if ($GetExecutable) {
-        $dcsPath = Join-Path $dcsPath "bin/DCS.exe"
+        $dcsPath = Join-Path $dcsPath $ExecutableSubpath
     }
     if (Test-Path -LiteralPath $dcsPath) {
         return $dcsPath

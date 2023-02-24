@@ -4,24 +4,34 @@ package.path  = package.path..";.\\LuaSocket\\?.lua"
 package.cpath = package.cpath..";.\\LuaSocket\\?.dll"
 socket = require("socket")
 ]]
-local connection = socket.connect("localhost", 1337)
-local dutExportSocket
-if connection ~= nil then
-    dutExportSocket = socket.try(connection)
-    if dutExportSocket ~= nil then
-        dutExportSocket:setoption("tcp-nodelay", true)
+if socket ~= nil then
+    local connection = socket.connect("localhost", 1337)
+    local dutExportSocket
+    if connection ~= nil then
+        dutExportSocket = socket.try(connection)
+        if dutExportSocket ~= nil then
+            dutExportSocket:setoption("tcp-nodelay", true)
+        end
     end
-end
 
-function Output(message)
-    if socket ~= nil and dutExportSocket ~= nil then
-        socket.try(dutExportSocket:send(tostring(message)..";"))
+    function Output(message)
+        if socket ~= nil and dutExportSocket ~= nil then
+            socket.try(dutExportSocket:send(tostring(message)..";"))
+        end
+    end
+    Output = socket.protect(Output)
+    function Assert(message)
+        if socket ~= nil and dutExportSocket ~= nil then
+            socket.try(dutExportSocket:send("DUT_ASSERSION="..tostring(message)..";"))
+        end
+    end
+    Assert = socket.protect(Assert)
+else
+    trigger.action.outText("DCS Unit Tester Mod not installed in your DCS installation, if you're doing local development/recording tracks this is fine", 10, false)
+    function Output(message)
+        trigger.action.outText("Output: "..tostring(message)..";", 5, false)
+    end
+    function Assert(message)
+        trigger.action.outText("DUT_ASSERSION="..tostring(message)..";", 5, false)
     end
 end
-Output = socket.protect(Output)
-function Assert(message)
-    if socket ~= nil and dutExportSocket ~= nil then
-        socket.try(dutExportSocket:send("DUT_ASSERSION="..tostring(message)..";"))
-    end
-end
-Assert = socket.protect(Assert)

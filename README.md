@@ -111,6 +111,11 @@ Run the script like so: `dcs-unit-tester.ps1 -TrackDirectory "C:/Path/To/Directo
 
 For a full list of parameters read: [PowerShell Parameters](#powershell-parameters)
 
+The supported extensions are:
+* <b>.trk</b> - Runs as a track file, ends when the track ends (Useful for testing the modules)
+* <b>.miz</b> - Runs in singleplayer mission file, ends when test returns the assersion (Useful for testing scripting functions and AI)
+* <b>.mp.miz</b> - Runs as a multiplayer server, ends when test returns the assersion (Useful for testing scripting functions and AI)
+
 ### 5. Observe
 
 If you want have the game render to watch what it's doing go to `Saved Games\DCS.unittest\Config\autoexec.cfg` and comment out the line like so
@@ -134,6 +139,7 @@ Headless|false|If enabled outputs TeamCity service messages
 DCSStartTimeout|360|Time in seconds the tester will wait for DCS to start before reporting a failure
 TrackLoadTimeout|240|Time in seconds the tester will wait for the track to load before reporting a failure
 TrackPingTimeout|30|Time in seconds the tester will wait between responses from the track file before reporting a failure (Detects crashes/freezes)
+MissionPlayTimeout|240|Time in seconds the tester will wait for a .miz file to call Assert(), not needed for trk files as they have a predetermined end time
 RetryLimit|2|How many times a track will be retried after a DCS failure (Crash\Fail to load\track freeze)
 RerunCount|1|How many times the track will be run, used in combination with PassMode below
 PassMode|All|Possible values:<br><b>All</b>: All runs of the test must pass for the test to report success<br><b>Majority</b>: Greater than 50% test runs must pass for the test to report success<br><b>Any</b>: At least 1 test run must pass for the test to report success<br><b>Last</b>: The result from the final test run is reported

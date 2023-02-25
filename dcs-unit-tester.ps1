@@ -13,6 +13,7 @@ param (
 	[float] $DCSStartTimeout = 360,
 	[float] $TrackLoadTimeout = 240,
 	[float] $TrackPingTimeout = 30,
+	[float] $MissionPlayTimeout = 240, # Timeout for when a mission calls Assert()
 	[int] $RetryLimit = 2,
 	[int] $RerunCount = 1,
 	[ValidateSet("All","Majority","Any","Last")]
@@ -136,18 +137,22 @@ try {
 	}
 
 	function LoadTrack {
-		param([string] $TrackPath)
+		param([string] $TrackPath, [switch]$Multiplayer)
 		$TrackPath = $TrackPath.Trim("`'").Trim("`"").Replace("`\", "/");
-		$lua = Get-Content -Path "$PSScriptRoot/Scripts/DCS.startMission.lua" -Raw
+		if ($Multiplayer) {
+			$lua = Get-Content -Path "$PSScriptRoot/Scripts/DCS.startMissionMultiplayer.lua" -Raw
+		} else {
+			$lua = Get-Content -Path "$PSScriptRoot/Scripts/DCS.startMission.lua" -Raw
+		}
 		$result = ($connector.SendReceiveCommandAsync($lua.Replace('{missionPath}', $TrackPath)).GetAwaiter().GetResult())
 		if ($result.Status -eq "RuntimeError"){
-			throw [InvalidOperationException] "Error Loading Track: $($result.Result)"
+			throw [InvalidOperationException] "Error Loading ${testType}: $($result.Result)"
 		}
 	}
 
 	function OnMenu {
 		try {
-			return ($connector.SendReceiveCommandAsync("return DCS.getModelTime()").GetAwaiter().GetResult().Result -eq 0)
+			return ($connector.SendReceiveCommandAsync("return DCS.getSimulatorMode()").GetAwaiter().GetResult().Result -eq '1')
 		} catch [TimeoutException] {
 			return $null;
 		}
@@ -159,8 +164,13 @@ try {
 	}
 
 	function IsTrackPlaying {
+		param([switch]$Mission)
 		try {
-			return ($connector.SendReceiveCommandAsync("return DCS.isTrackPlaying()").GetAwaiter().GetResult().Result -eq 'true')
+			if ($Mission) {
+				return ($connector.SendReceiveCommandAsync("return DCS.getSimulatorMode()").GetAwaiter().GetResult().Result -eq '4')
+			} else {
+				return ($connector.SendReceiveCommandAsync("return DCS.isTrackPlaying()").GetAwaiter().GetResult().Result -eq 'true')
+			}
 		} catch [TimeoutException] {
 			return $null;
 		}
@@ -211,12 +221,12 @@ try {
 		if ($data -match $regex0) {
 			$absoluteTime0 = $Matches[1]
 		} else {
-			Write-Error "Regex didn't match $data"
+			return $null
 		}
 		if ($data -match $regex1) {
 			$absoluteTime1 = $Matches[1]
 		} else {
-			Write-Error "Regex didn't match $data"
+			return $null
 		}
 		return ($absoluteTime1 - $absoluteTime0)
 	}
@@ -260,7 +270,7 @@ try {
 	# Load Test tracks must be run first
 	$loadTestTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and ($_.Name.StartsWith('LoadTest.'))})
 	# Regular tests are run last
-	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and (-not $_.Name.StartsWith('.')) -and (-not $_.Name.StartsWith('LoadTest.'))})
+	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -in ".trk",".miz" -and (-not $_.Name.StartsWith('.')) -and (-not $_.Name.StartsWith('LoadTest.'))})
 	$tracks = $loadTestTracks + $normalTracks
 	$trackCount = ($tracks | Measure-Object).Count
 	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
@@ -290,9 +300,23 @@ try {
 			$config = ConvertFrom-Json (Get-Content -Path $configPathTemplate -Raw)
 		}
 
-		$testName = $(split-path $_.FullName -leafBase)
-		$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
+		$isTrack = $($_.Extension -eq ".trk")
+		$isMultiplayer = $($_.BaseName.EndsWith(".mp"))
+		$testType="Track"
+		if ($isTrack -eq $false) {
+			if ($isMultiplayer -eq $true){
+				$testType="Mission (MP)"
+			} else {
+				$testType="Mission (SP)"
+			}
+		} 
 
+		$testName = $(split-path $_.FullName -leafBase)
+		if ($isTrack) {
+			$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
+		} else {
+			$trackDuration = $null
+		}
 		# Headless client reporting
 		if ($Headless) {
 			# Finish any test suites we were in if they aren't in the new path
@@ -356,7 +380,7 @@ try {
 		# Track retry loop
 		while (($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
 			try {
-				$progressMessage = "`tTrack ($trackProgress/$trackCount)"
+				$progressMessage = "`Test ($trackProgress/$trackCount)"
 				if ($localRerunCount -gt 1) {
 					$progressMessage += ", Run ($runCount/$localRerunCount)"
 				}
@@ -378,10 +402,10 @@ try {
 					if ([string]::IsNullOrWhiteSpace($trackDescription)) {
 						throw "Description existed but was empty"
 					}
-					Write-Host "`t`t✅ Track Description Retrieved: " -F Green
+					Write-Host "`t`t✅ $testType Description Retrieved: " -F Green
 					Write-Host $trackDescription
 				} catch {
-					Write-Host "`t`t❌ Failed to get track description: $_" -F Red
+					Write-Host "`t`t❌ Failed to get $testType description: $_" -F Red
 				}
 				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
 					Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
@@ -431,7 +455,7 @@ try {
 						$oldSeed = (GetSeed -Path $_.FullName)
 						$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
 						Set-Content -Path $temp -Value $randomSeed
-						Write-Host "`t`tℹ️ Randomising track seed, Old: $oldSeed, New: $randomSeed"
+						Write-Host "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
 						if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
 						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile $temp -Destination "track_data/seed"
 					} finally {
@@ -445,9 +469,8 @@ try {
 					if (-not $isLoadTest -and $loadableModules[$playerAircraftType] -eq $false) {
 						throw [SkipTestException]::new()
 					}
-					Write-Host "`t`t✅ Commanding DCS to load track" -F Green
-					LoadTrack -TrackPath $_.FullName
-
+					Write-Host "`t`t✅ Commanding DCS to load $testType" -F Green
+					LoadTrack -TrackPath $_.FullName -Multiplayer:$isMultiplayer
 					# Set up endpoint and start listening
 					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
 					$listener = new-object System.Net.Sockets.TcpListener $EndPoint
@@ -455,16 +478,21 @@ try {
 				
 					# Wait for an incoming connection, if no connection occurs throw an exception
 					$task = $listener.AcceptTcpClientAsync()
-					$trackStartedPredicate = { $Task.AsyncWaitHandle.WaitOne(100) -eq $true -and (IsTrackPlaying) }
-					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for track to load" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
-						throw [TimeoutException] "Track did not finish loading"
+					if (-not (Wait-Until -Predicate {$task.AsyncWaitHandle.WaitOne(100) -eq $true} -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for TCP Connection" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+						throw [TimeoutException] "$testType did not establish a TCP Connection"
 					}
-					$trackUnpausedPredicate = {
-						$paused = (GetPause)
-						return ($paused -ne $null -and $paused -eq $false -and (GetModelTime -gt 0))
+					$trackStartedPredicate = { ((IsTrackPlaying -Mission:(-not $isTrack)) -eq $true) }
+					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for $testType to load" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+						throw [TimeoutException] "$testType did not finish loading"
 					}
-					if (-not (Wait-Until -Predicate $trackUnpausedPredicate -CancelIf { -not (GetDCSRunning) } -RunEach { SetPause -Paused $false } -Prefix "`t`t" -Message "Waiting for track to play" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
-						throw [TimeoutException] "Track did not play"
+					if ($isMultiplayer -eq $false) { # Multiplayer starts playing and without a briefing so skip waiting for it to play
+						$trackUnpausedPredicate = {
+							$paused = (GetPause)
+							return ($paused -ne $null -and $paused -eq $false -and (GetModelTime -gt 0))
+						}
+						if (-not (Wait-Until -Predicate $trackUnpausedPredicate -CancelIf { -not (GetDCSRunning) } -RunEach { SetPause -Paused $false } -Prefix "`t`t" -Message "Waiting for $testType to play" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
+							throw [TimeoutException] "$testType did not play"
+						}
 					}
 					$data = $task.GetAwaiter().GetResult()
 					$stream = $data.GetStream() 
@@ -488,12 +516,24 @@ try {
 							$EncodedText.GetString($bytes,0, $i).Split(';') | % {
 								if ($_) {
 									$OutputList.Add($_)
+									# Tells the mission to stop since this isn't a track it won't end by itself
+									if ((-not $using:isTrack) -and ($_ -match '^DUT_ASSERSION=(true|false)$')) {
+										if ($using:isMultiplayer) {
+											($using:connector).SendReceiveCommandAsync("return net.stop_game()").GetAwaiter().GetResult().Result
+											($using:connector).SendReceiveCommandAsync("return net.stop_network()").GetAwaiter().GetResult().Result
+											# sleep 1
+											# # Backs out of the server browser
+											# Start-Process -FilePath "$($using:PSScriptRoot)/SendKeys.exe" -ArgumentList "$($using:DcsPid)",0,"{Esc}"
+										} else {
+											($using:connector).SendReceiveCommandAsync("return DCS.stopMission()").GetAwaiter().GetResult().Result
+										}
+										return
+									}
 								}
 							}
 						}
 					}
 					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
-					
 					# Use AutoHotkey script to tell DCS to increase time acceleration
 					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssersion) {
 						Write-Host "`t`tℹ️ Setting Time Acceleration to $($localTimeAcceleration)x"
@@ -509,7 +549,7 @@ try {
 					# Wait for track to end loop
 					$lastUpdate = [DateTime]::Now
 					$sleepTime = 1
-					while ((!$job.Finished) -or (IsTrackPlaying -eq $true)) {
+					while ((!$job.Finished) -or ((IsTrackPlaying -Mission:(-not $isTrack)) -eq $true)) {
 						$modelTime = [float](GetModelTime)
 						if ($modelTime -gt $lastModelTime) {
 							$lastUpdate = [DateTime]::Now
@@ -520,20 +560,23 @@ try {
 						}
 						$lastUpdateDelta = (([DateTime]::Now - $lastUpdate).TotalSeconds)
 						if (!$Headless) {
-							$string = "`t`t🕑 $(Spinner) Waiting for track to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds, x{4:N2} acceleration" -f ($modelTime/$trackDuration),$modelTime,$trackDuration,($stopwatch.Elapsed.TotalSeconds),$timeAccel
+							$string = "`t`t🕑 $(Spinner) Waiting for $testType to finish {0:P0} Real: {3:N1} DCS: {1:N1}/{2:N1} seconds, x{4:N2} acceleration" -f ($modelTime/$trackDuration),$modelTime,(($null -eq $trackDuration) ? "?" : $trackDuration),($stopwatch.Elapsed.TotalSeconds),$timeAccel
 							Overwrite $string -ForegroundColor Yellow
 						}
-						if ($modelTime -gt ($trackDuration * 2)){
-							throw ("DCS Track has ran for {0:N1} seconds, 2x longer than reported duration of {1:N1} seconds, aborting..." -f $modelTime,$trackDuration)
+						if (($null -ne $trackDuration) -and $modelTime -gt ($trackDuration * 2)){
+							throw [TimeoutException] ("DCS $testType has ran for {0:N1} seconds, 2x longer than reported duration of {1:N1} seconds, aborting..." -f $modelTime,$trackDuration)
 						}
 						if ($lastUpdateDelta -gt $TrackPingTimeout) {
-							throw [TimeoutException] ("DCS Track Unresponsive, last heard from {0:N1} seconds ago, breached {1}s timeout" -f $lastUpdateDelta,$TrackPingTimeout)
+							throw [TimeoutException] ("DCS $testType Unresponsive, last heard from {0:N1} seconds ago, breached {1}s timeout" -f $lastUpdateDelta,$TrackPingTimeout)
+						}
+						if ((-not $isTrack) -and ($modelTime -gt $MissionPlayTimeout)){
+							throw [TimeoutException] ("DCS $testType has ran for {0:N1} seconds without reporting an assersion, this is longer than the MissionPlayTimeout of {1:N1} seconds, aborting..." -f $modelTime,$MissionPlayTimeout)
 						}
 						$lastModelTime = $modelTime
 						# Throttle so DCS isn't checked too often
 						sleep $sleepTime
 					}
-					if (!$Headless) {Overwrite "`t`t✅ Track Finished ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green}		
+					if (!$Headless) {Overwrite "`t`t✅ $testType Finished ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green}		
 				} catch [SkipTestException] {
 					$output.Add("Skipped test as aircraft load test failed")
 					$output.Add("DUT_ASSERSION=false")
@@ -562,7 +605,7 @@ try {
 					Write-Host "##teamcity[testMetadata testName='$testName' name='DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
 				}
 				if ($resultSet -eq $false) {
-					throw "Track did not send an assersion result, maybe crash?, assuming failed"
+					throw "$testType did not send an assersion result, maybe crash?, assuming failed"
 				}
 				$runCount = $runCount + 1
 			} catch {

@@ -301,9 +301,10 @@ try {
 		}
 
 		$isTrack = $($_.Extension -eq ".trk")
-		$isMultiplayer = $($_.BaseName.EndsWith(".mp"))
 		$testType="Track"
+		$isMultiplayer = $false
 		if ($isTrack -eq $false) {
+			$isMultiplayer = $($_.BaseName.EndsWith(".mp"))
 			if ($isMultiplayer -eq $true){
 				$testType="Mission (MP)"
 			} else {

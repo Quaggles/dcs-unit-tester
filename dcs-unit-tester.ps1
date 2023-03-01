@@ -657,7 +657,7 @@ try {
 		}
 		# Record the load test result in a dictionary
 		if ($isLoadTest) {
-			if ($result){
+			if ($result -eq $TRUE){
 				Write-Host "`t✅ Load test for $playerAircraftType set to $result" -ForegroundColor Green
 			} else {
 				Write-Host "`t❌ Load test for $playerAircraftType set to $result" -ForegroundColor Red
@@ -666,16 +666,24 @@ try {
 		}
 		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 
-		# Record tacview artifact
-		if ($Headless -and (Test-Path $tacviewDirectory)) {
-			$tacviewPath = gci "$tacviewDirectory\*DCS-$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
-			if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
-				Write-Host "Tacview found for $testName at $tacviewPath"
-				Write-Host "##teamcity[publishArtifacts '$tacviewPath']"
-				$artifactPath = split-path $tacviewPath -leaf
+		if ($Headless) {
+			# Record tacview artifact
+			if (Test-Path $tacviewDirectory) {
+				$tacviewPath = gci "$tacviewDirectory\Tacview-*$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
+				if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
+					Write-Host "Tacview found for $testName at $tacviewPath"
+					Write-Host "##teamcity[publishArtifacts '$tacviewPath']"
+					$artifactPath = split-path $tacviewPath -leaf
+					Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
+				} else {
+					Write-Host "Tacview not found for $testName"
+				}
+			}
+			# If test failed upload the track as an artifact
+			if ($result -eq $false) {
+				Write-Host "##teamcity[publishArtifacts '$($_.FullName)']"
+				$artifactPath = split-path $_.FullName -leaf
 				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
-			} else {
-				Write-Host "Tacview not found for $testName"
 			}
 		}
 		

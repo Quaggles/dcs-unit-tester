@@ -9,6 +9,7 @@ param (
 	[switch] $InvertAssersion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
 	[switch] $UpdateTracks, # Update scripts in the track file with those from MissionScripts/
 	[switch] $Reseed, # Regenerate the track seed before playing
+	[int] $ReseedSeed = [Environment]::TickCount, # Seed used for generating random seeds
 	[switch] $Headless, # Output TeamCity service messages
 	[float] $DCSStartTimeout = 360,
 	[float] $TrackLoadTimeout = 240,
@@ -284,6 +285,11 @@ try {
 	# Stack representing the subdirectory we are in, used for reporting correct nested test suites to TeamCity
 	$testSuiteStack = New-Object Collections.Generic.List[string]
 
+	# Initialise Seed
+	if ($ReseedSeed) {
+		Write-Host "Initialising seed to $ReseedSeed for any reseed operations"
+		Get-Random -Minimum 0 -Maximum 1000000 -SetSeed $ReseedSeed | Out-Null
+	}
 	# Run the tracks
 	$tracks | ForEach-Object {
 		# Get track information
@@ -449,7 +455,7 @@ try {
 					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
 					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 				}
-				if ($localReseed) {
+				if ($localReseed -and $isTrack) {
 					# Update track seed in the mission to make it random
 					$temp = New-TemporaryFile
 					try {

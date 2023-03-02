@@ -135,6 +135,7 @@ TrackDirectory|Working Directory|Path to the directory containing tracks
 QuitDcsOnFinish|false|Sets if the tester quits DCS when tests are complete
 UpdateTracks|false|If enabled updates scripts in the track file with those from [MissionScripts/](/MissionScripts/), useful for keeping the networking scripts up to date across hundreds of track files
 Reseed|false|If enabled regenerates the tracks RNG seed, can be used for testing things with randomness like AI decision making or weapon CEP
+ReseedSeed|`[Environment]::TickCount`|Seed used for generating random seeds for track reseeding
 Headless|false|If enabled outputs TeamCity service messages
 DCSStartTimeout|360|Time in seconds the tester will wait for DCS to start before reporting a failure
 TrackLoadTimeout|240|Time in seconds the tester will wait for the track to load before reporting a failure

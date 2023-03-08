@@ -556,7 +556,7 @@ try {
 					# Wait for track to end loop
 					$lastUpdate = [DateTime]::Now
 					$sleepTime = 1
-					while ((!$job.Finished) -or ((IsTrackPlaying -Mission:(-not $isTrack)) -eq $true)) {
+					while ((!$job.Finished) -or ((IsTrackPlaying -Mission:(-not $isTrack)) -ne $false)) {
 						$modelTime = [float](GetModelTime)
 						if ($modelTime -gt $lastModelTime) {
 							$lastUpdate = [DateTime]::Now

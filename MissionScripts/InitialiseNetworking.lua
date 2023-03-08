@@ -32,6 +32,7 @@ else
         trigger.action.outText("Output: "..tostring(message)..";", 5, false)
     end
     function Assert(message)
+		error("\n\n\n\n\n\n\n\nThis is not an error, this window shows you the test result when the mod isn't installed\n\nTest Result: "..tostring(message).."\n\n\n\n\n\n\n\n")
         trigger.action.outText("DUT_ASSERSION="..tostring(message)..";", 5, false)
     end
 end

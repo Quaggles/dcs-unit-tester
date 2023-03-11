@@ -21,7 +21,8 @@ param (
 	[string] $PassMode = "All",
 	[Boolean] $PassModeShortCircuit = $false,
 	[int] $TimeAcceleration,
-	[int] $SetKeyDelay = 0
+	[int] $SetKeyDelay = 0,
+	[string] $WriteDir = "DCS.unittest"
 )
 
 class SkipTestException : Exception { }
@@ -30,6 +31,14 @@ $ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
 $connector.Timeout = [TimeSpan]::FromSeconds(5)
+$tempArtifacts = @()
+$invalidChars = [System.IO.Path]::GetInvalidFileNameChars()
+function Get-SafePath([string]$Path) {
+	$invalidChars | % {
+		$Path = $Path.Replace($_, "_")
+	}
+	return $Path
+}
 try {
 	if (-Not $GamePath) {
 		Write-Host "No Game Path provided, attempting to retrieve from registry" -ForegroundColor Yellow -BackgroundColor Black
@@ -262,6 +271,8 @@ try {
 		return ($Host.UI.RawUI.WindowSize.Width - $textLen)
 	}
 	$tacviewDirectory = "~\Documents\Tacview"
+	$savedGamesDirectory = Get-ItemPropertyValue -Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders" -Name "{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}"
+	$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath $WriteDir
 	# Clear tacview folder
 	if ($Headless -and (Test-Path $tacviewDirectory)) {
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item
@@ -439,7 +450,7 @@ try {
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
 					Write-Host "`t`t✅ Starting DCS" -F Green
-					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w","DCS.unittest" -PassThru).Id
+					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
 					sleep 5
 				} else { # Fallback if we didn't start the process
 					$dcsPid = (GetDCSRunning).Id
@@ -618,6 +629,15 @@ try {
 			} catch {
 				$resultSet = $false
 				$result = $false
+				if ($Headless) { # Record log file as artifact
+					$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath.log"
+					$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+					Write-Host "Recording DCS log as artifact, will copy to $tempLog"
+					Copy-Item -LiteralPath (Join-Path -Path $writeDirFull -ChildPath "Logs/dcs.log") -Destination $tempLog
+					$tempArtifacts += $tempLog
+					Write-Host "##teamcity[publishArtifacts '$tempLog']"
+					Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
+				}
 				Write-Host "`n`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
 				KillDCS
 				$failureCount = $failureCount + 1
@@ -731,5 +751,10 @@ try {
 		Read-Host "Press enter to exit"
 	}
 } finally {
+	if ($Headless) {
+		$tempArtifacts | % {
+			Remove-Item $_
+		}
+	}
 	if ($connector) { $connector.Dispose() }
 }

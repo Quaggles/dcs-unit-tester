@@ -34,7 +34,9 @@ The system can only test against things that exist in the mission lua environmen
 
 For example you could test waypoint entry and coupled autopilot modes by configuring everything and then having a an assersion that the aircraft has to fly within a 500m zone around the waypoint before a time expires. You cannot test things like "Is the CCIP reticule accurate" because by replaying the player actions even if the reticule was broken they would fly the aircraft to the same positon every time.
 
-## How to create a test
+## How to create a test (Quick)
+
+Video Guide: https://www.youtube.com/watch?v=D214oTs1dGg
 
 A template miz [DUT - Template.miz](./DUT%20-%20Template.miz?raw=true) is available in this repository that tests if all Red team units are damaged by the end of the test.
 

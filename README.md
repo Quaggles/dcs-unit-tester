@@ -36,7 +36,7 @@ For example you could test waypoint entry and coupled autopilot modes by configu
 
 ## How to create a test
 
-A template miz `DUT - Template.miz` is available in this repository that tests if all Red team units are damaged by the end of the test.
+A template miz [DUT - Template.miz](./DUT%20-%20Template.miz?raw=true) is available in this repository that tests if all Red team units are damaged by the end of the test.
 
 When creating tests remove as many variables from each test as possible and make sure you are testing ONLY the variable that you want, as an example for my F/A-18C AIM-120 LTWS test I do the following:
 

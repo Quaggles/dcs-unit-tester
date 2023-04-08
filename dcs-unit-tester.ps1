@@ -295,14 +295,15 @@ try {
 
 	# Stack representing the subdirectory we are in, used for reporting correct nested test suites to TeamCity
 	$testSuiteStack = New-Object Collections.Generic.List[string]
-
-	# Initialise Seed
 	if ($ReseedSeed) {
-		Write-Host "Initialising seed to $ReseedSeed for any reseed operations"
-		Get-Random -Minimum 0 -Maximum 1000000 -SetSeed $ReseedSeed | Out-Null
+		Write-Host "Track reseed seed is set to: $ReseedSeed"
 	}
 	# Run the tracks
 	$tracks | ForEach-Object {
+		# Initialise Seed
+		if ($ReseedSeed) {
+			Get-Random -Minimum 0 -Maximum 1000000 -SetSeed $ReseedSeed | Out-Null
+		}
 		# Get track information
 		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"

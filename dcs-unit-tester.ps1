@@ -307,11 +307,11 @@ try {
 		}
 		# Get track information
 		$track = $_
-		$relativeTestPath = $([Path]::GetRelativePath($pwd, $track.FullName))
+		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$config = $null
-		$configPathTemplate = Join-Path -Path (split-path $track.FullName -Parent) -ChildPath "/.base.json"
-		$configPath = [System.IO.Path]::ChangeExtension($track.FullName, ".json")
+		$configPathTemplate = Join-Path -Path (split-path $_.FullName -Parent) -ChildPath "/.base.json"
+		$configPath = [System.IO.Path]::ChangeExtension($_.FullName, ".json")
 		if (Test-Path -Path $configPath) {
 			Write-Host "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPath))"
 			$config = ConvertFrom-Json (Get-Content -Path $configPath -Raw)
@@ -320,11 +320,11 @@ try {
 			$config = ConvertFrom-Json (Get-Content -Path $configPathTemplate -Raw)
 		}
 
-		$isTrack = $($track.Extension -eq ".trk")
+		$isTrack = $($_.Extension -eq ".trk")
 		$testType="Track"
 		$isMultiplayer = $false
 		if ($isTrack -eq $false) {
-			$isMultiplayer = $($track.BaseName.EndsWith(".mp"))
+			$isMultiplayer = $($_.BaseName.EndsWith(".mp"))
 			if ($isMultiplayer -eq $true){
 				$testType="Mission (MP)"
 			} else {
@@ -332,9 +332,9 @@ try {
 			}
 		} 
 
-		$testName = $(split-path $track.FullName -leafBase)
+		$testName = $(split-path $_.FullName -leafBase)
 		if ($isTrack) {
-			$trackDuration = [float](GetTrackDuration -Path (Get-Item $track.FullName))
+			$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
 		} else {
 			$trackDuration = $null
 		}
@@ -349,9 +349,9 @@ try {
 				} else {
 					$peek = $null
 				}
-				if ($peek -ne $track) {
+				if ($peek -ne $_) {
 					$testSuiteStack.RemoveAt($index)
-					Write-Host "##teamcity[testSuiteFinished name='$track']"
+					Write-Host "##teamcity[testSuiteFinished name='$_']"
 				}
 				$index = $index - 1
 			}
@@ -361,13 +361,13 @@ try {
 			$testSuites | % {
 				if ($testSuiteStack.Count -ge $index + 1) {
 					$peek = $testSuiteStack[$index]
-					if ($peek -ne $track) {
-						$testSuiteStack.Add($track)
-						Write-Host "##teamcity[testSuiteStarted name='$track']"
+					if ($peek -ne $_) {
+						$testSuiteStack.Add($_)
+						Write-Host "##teamcity[testSuiteStarted name='$_']"
 					}
 				} else {
-					$testSuiteStack.Add($track)
-					Write-Host "##teamcity[testSuiteStarted name='$track']"
+					$testSuiteStack.Add($_)
+					Write-Host "##teamcity[testSuiteStarted name='$_']"
 				}
 				$index = $index + 1
 			}
@@ -419,14 +419,14 @@ try {
 				# Track Description
 				$trackDescription = $null
 				try {
-					$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $track.FullName)
+					$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
 					if ([string]::IsNullOrWhiteSpace($trackDescription)) {
 						throw "Description existed but was empty"
 					}
 					Write-Host "`t`t✅ $testType Description Retrieved: " -F Green
 					Write-Host $trackDescription
 				} catch {
-					Write-Host "`t`t❌ Failed to get $testType description: $track" -F Red
+					Write-Host "`t`t❌ Failed to get $testType description: $_" -F Red
 				}
 				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
 					Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
@@ -435,20 +435,20 @@ try {
 				# Retrieve player aircraft from track
 				$playerAircraftType = $null
 				try {
-					$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $track.FullName)
+					$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
 					if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
 						throw "Player aircraft type could not be retrieved"
 					}
 					Write-Host "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
 				} catch {
-					Write-Host "`t`t❌ Failed to get player aircraft type: $track" -F Red
+					Write-Host "`t`t❌ Failed to get player aircraft type: $_" -F Red
 				}
 				if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
 					Write-Host "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
 				}
 
 				# Determine if track is a LoadTest
-				$isLoadTest = $track.Name.StartsWith("LoadTest.")
+				$isLoadTest = $_.Name.StartsWith("LoadTest.")
 
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
@@ -465,20 +465,20 @@ try {
 				if ($UpdateTracks) {
 					# Update scripts in the mission incase the source scripts updated
 					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $track.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
 					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $track.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 				}
 				if ($localReseed -and $isTrack) {
 					# Update track seed in the mission to make it random
 					$temp = New-TemporaryFile
 					try {
-						$oldSeed = (GetSeed -Path $track.FullName)
+						$oldSeed = (GetSeed -Path $_.FullName)
 						$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
 						Set-Content -Path $temp -Value $randomSeed
 						Write-Host "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
 						if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $track.FullName -SourceFile $temp -Destination "track_data/seed"
+						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile $temp -Destination "track_data/seed"
 					} finally {
 						Remove-Item -Path $temp
 					}
@@ -491,7 +491,7 @@ try {
 						throw [SkipTestException]::new()
 					}
 					Write-Host "`t`t✅ Commanding DCS to load $testType" -F Green
-					LoadTrack -TrackPath $track.FullName -Multiplayer:$isMultiplayer
+					LoadTrack -TrackPath $_.FullName -Multiplayer:$isMultiplayer
 					# Set up endpoint and start listening
 					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
 					$listener = new-object System.Net.Sockets.TcpListener $EndPoint
@@ -714,8 +714,8 @@ try {
 			}
 			# If test failed upload the track as an artifact
 			if ($result -eq $false) {
-				Write-Host "##teamcity[publishArtifacts '$($track.FullName)']"
-				$artifactPath = split-path $track.FullName -leaf
+				Write-Host "##teamcity[publishArtifacts '$($_.FullName)']"
+				$artifactPath = split-path $_.FullName -leaf
 				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
 			}
 		}
@@ -736,7 +736,7 @@ try {
 	# We're finished so finish the test suites
 	if ($Headless) {
 		$testSuiteStack | Sort-Object -Descending {(++$script:i)} | % {
-			Write-Host "##teamcity[testSuiteFinished name='$track']"
+			Write-Host "##teamcity[testSuiteFinished name='$_']"
 		}
 	}
 	if ($QuitDcsOnFinish){

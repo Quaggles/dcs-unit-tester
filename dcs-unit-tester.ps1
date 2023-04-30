@@ -7,7 +7,7 @@ param (
 	[string] $TrackDirectory, # Filter for the tracks
 	[switch] $QuitDcsOnFinish,
 	[switch] $InvertAssersion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
-	[switch] $UpdateTracks, # Update scripts in the track file with those from MissionScripts/
+	[switch] $UpdateTracks = $true, # Update scripts in the track file with those from MissionScripts/
 	[switch] $Reseed, # Regenerate the track seed before playing
 	[int] $ReseedSeed = [Environment]::TickCount, # Seed used for generating random seeds
 	[switch] $Headless, # Output TeamCity service messages
@@ -307,6 +307,11 @@ try {
 		}
 		# Get track information
 		$track = $_
+
+		# Create a temporary copy of the track for modification and sending to DCS
+		$tempTrackPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath (Get-SafePath -Path ($_.Name))
+		Copy-Item -LiteralPath ($_.FullName) -Destination $tempTrackPath
+
 		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$config = $null
@@ -465,9 +470,9 @@ try {
 				if ($UpdateTracks) {
 					# Update scripts in the mission incase the source scripts updated
 					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
 					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 				}
 				if ($localReseed -and $isTrack) {
 					# Update track seed in the mission to make it random
@@ -478,7 +483,7 @@ try {
 						Set-Content -Path $temp -Value $randomSeed
 						Write-Host "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
 						if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $_.FullName -SourceFile $temp -Destination "track_data/seed"
+						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile $temp -Destination "track_data/seed"
 					} finally {
 						Remove-Item -Path $temp
 					}
@@ -491,7 +496,7 @@ try {
 						throw [SkipTestException]::new()
 					}
 					Write-Host "`t`t✅ Commanding DCS to load $testType" -F Green
-					LoadTrack -TrackPath $_.FullName -Multiplayer:$isMultiplayer
+					LoadTrack -TrackPath $tempTrackPath -Multiplayer:$isMultiplayer
 					# Set up endpoint and start listening
 					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
 					$listener = new-object System.Net.Sockets.TcpListener $EndPoint
@@ -714,8 +719,8 @@ try {
 			}
 			# If test failed upload the track as an artifact
 			if ($result -eq $false) {
-				Write-Host "##teamcity[publishArtifacts '$($_.FullName)']"
-				$artifactPath = split-path $_.FullName -leaf
+				Write-Host "##teamcity[publishArtifacts '$($tempTrackPath)']"
+				$artifactPath = split-path $tempTrackPath -leaf
 				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
 			}
 		}
@@ -762,6 +767,9 @@ try {
 		$tempArtifacts | % {
 			Remove-Item $_
 		}
+	}
+	if (Test-Path -LiteralPath $tempTrackPath) {
+		Remove-Item $tempTrackPath
 	}
 	if ($connector) { $connector.Dispose() }
 }

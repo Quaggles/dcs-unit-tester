@@ -380,7 +380,9 @@ try {
 
 		# Report Test Start
 		if ($Headless) {
+			Start-Sleep -Seconds 1
 			Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']"
+			Start-Sleep -Seconds 1
 		}
 		$stopwatch.Reset();
 		$stopwatch.Start();

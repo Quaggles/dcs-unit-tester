@@ -16,6 +16,7 @@ param (
 	[float] $TrackPingTimeout = 30,
 	[float] $MissionPlayTimeout = 240, # Timeout for when a mission calls Assert()
 	[int] $RetryLimit = 2,
+	[float] $RetrySleepDuration = 3,
 	[int] $RerunCount = 1,
 	[ValidateSet("All","Majority","Any","Last")]
 	[string] $PassMode = "All",
@@ -496,6 +497,11 @@ try {
 					# Skip test if load test failed
 					if (-not $isLoadTest -and $loadableModules[$playerAircraftType] -eq $false) {
 						throw [SkipTestException]::new()
+					}
+					if ($failureCount -gt 0) {
+						$duration = $RetrySleepDuration
+						Write-Host "`t`t🕑 Last attempt crashed, sleeping for ${duration}s before load" -F Yellow
+						Start-Sleep -Seconds $duration
 					}
 					Write-Host "`t`t✅ Commanding DCS to load $testType" -F Green
 					LoadTrack -TrackPath $tempTrackPath -Multiplayer:$isMultiplayer

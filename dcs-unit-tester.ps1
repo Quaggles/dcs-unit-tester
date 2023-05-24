@@ -85,7 +85,7 @@ try {
 
 	function GetProcessRunning {
 		param($Path)
-		return Get-Process (GetProcessFromPath $Path) -ErrorAction SilentlyContinue
+		return Get-Process (GetProcessFromPath $Path) -ErrorAction SilentlyContinue | where {$_.CommandLine.Replace("`"", "").Contains("-w $WriteDir")}
 	}
 
 	function GetDCSRunning {
@@ -171,7 +171,7 @@ try {
 	}
 	function KillDCS {
 		$dcsPid = $null
-		Stop-Process -Name (GetProcessFromPath($GamePath)) -Force -ErrorAction SilentlyContinue
+		GetDCSRunning | Stop-Process -Force -ErrorAction SilentlyContinue
 		sleep 10
 	}
 

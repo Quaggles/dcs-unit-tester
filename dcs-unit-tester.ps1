@@ -406,10 +406,59 @@ try {
 		$localRetryLimit = SetConfigVar $config $RetryLimit "RetryLimit"
 		$localReseed = SetConfigVar $config $Reseed "Reseed"
 		$localPassMode = SetConfigVar $config $PassMode "PassMode"
+
+		# Determine if track is a LoadTest
+		$isLoadTest = $_.Name.StartsWith("LoadTest.")
+
+		# Track Description
+		$trackDescription = $null
+		try {
+			$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
+			if ([string]::IsNullOrWhiteSpace($trackDescription)) {
+				throw "Description existed but was empty"
+			}
+			Write-Host "`t`t✅ $testType Description Retrieved: " -F Green
+			Write-Host $trackDescription
+		} catch {
+			Write-Host "`t`t❌ Failed to get $testType description: $_" -F Red
+		}
+		if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
+			Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
+		}
+
+		# Retrieve player aircraft from track
+		$playerAircraftType = $null
+		try {
+			$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
+			if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
+				throw "Player aircraft type could not be retrieved"
+			}
+			Write-Host "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
+		} catch {
+			Write-Host "`t`t❌ Failed to get player aircraft type: $_" -F Red
+		}
+		if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
+			Write-Host "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
+		}
+
+		# Update track
+		if ($UpdateTracks) {
+			# Update scripts in the mission incase the source scripts updated
+			if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+			if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+		}
+		$skipped = $false
+		# Skip test if load test failed
+		if (-not $isLoadTest -and $loadableModules[$playerAircraftType] -eq $false){
+			$runCount = $localRerunCount + 1
+			$skipped = $true
+		}
 		# Track retry loop
 		while (($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
 			try {
-				$progressMessage = "`Test ($trackProgress/$trackCount)"
+				$progressMessage = "Test ($trackProgress/$trackCount)"
 				if ($localRerunCount -gt 1) {
 					$progressMessage += ", Run ($runCount/$localRerunCount)"
 				}
@@ -424,40 +473,6 @@ try {
 					Write-Host $progressMessage
 				}
 
-				# Track Description
-				$trackDescription = $null
-				try {
-					$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
-					if ([string]::IsNullOrWhiteSpace($trackDescription)) {
-						throw "Description existed but was empty"
-					}
-					Write-Host "`t`t✅ $testType Description Retrieved: " -F Green
-					Write-Host $trackDescription
-				} catch {
-					Write-Host "`t`t❌ Failed to get $testType description: $_" -F Red
-				}
-				if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
-					Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
-				}
-
-				# Retrieve player aircraft from track
-				$playerAircraftType = $null
-				try {
-					$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
-					if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
-						throw "Player aircraft type could not be retrieved"
-					}
-					Write-Host "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
-				} catch {
-					Write-Host "`t`t❌ Failed to get player aircraft type: $_" -F Red
-				}
-				if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
-					Write-Host "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
-				}
-
-				# Determine if track is a LoadTest
-				$isLoadTest = $_.Name.StartsWith("LoadTest.")
-
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
 					Write-Host "`t`t✅ Starting DCS" -F Green
@@ -470,15 +485,9 @@ try {
 				if ($started -eq $false) {
 					throw [TimeoutException] "DCS did not load to main menu"
 				}
-				if ($UpdateTracks) {
-					# Update scripts in the mission incase the source scripts updated
-					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
-					if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
-					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
-				}
+
+				# Update track seed in the mission to make it random
 				if ($localReseed -and $isTrack) {
-					# Update track seed in the mission to make it random
 					$temp = New-TemporaryFile
 					try {
 						$oldSeed = (GetSeed -Path $_.FullName)
@@ -494,10 +503,6 @@ try {
 
 				try {
 					$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
-					# Skip test if load test failed
-					if (-not $isLoadTest -and $loadableModules[$playerAircraftType] -eq $false) {
-						throw [SkipTestException]::new()
-					}
 					if ($failureCount -gt 0) {
 						$duration = $RetrySleepDuration
 						Write-Host "`t`t🕑 Last attempt crashed, sleeping for ${duration}s before load" -F Yellow
@@ -694,7 +699,10 @@ try {
 			$result = ($resultSet -eq $true -and $result -eq $TRUE)
 		}
 		$passMessage = "PassMode:$localPassMode [$successCount/$localRerunCount] {0:P0}" -f ($successCount/$localRerunCount)
-		if ($result -eq $TRUE) {
+		if ($skipped) {
+			Write-Host "`t➡️ Test ($trackProgress/$trackCount) Skipped, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
+			if ($Headless) { Write-Host "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
+		} elseif ($result -eq $TRUE) {
 			Write-Host "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
 			$trackSuccessCount = $trackSuccessCount + 1
 		} else {

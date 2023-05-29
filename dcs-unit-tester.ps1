@@ -784,7 +784,7 @@ try {
 			Remove-Item $_
 		}
 	}
-	if (Test-Path -LiteralPath $tempTrackPath) {
+	if ($tempTrackPath -and (Test-Path -LiteralPath $tempTrackPath)) {
 		Remove-Item $tempTrackPath
 	}
 	if ($connector) { $connector.Dispose() }

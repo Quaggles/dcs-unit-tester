@@ -24,7 +24,8 @@ param (
 	[int] $TimeAcceleration,
 	[int] $SetKeyDelay = 0,
 	[string] $WriteDir = "DCS.unittest",
-	[switch] $WriteOutput
+	[switch] $WriteOutput,
+	[switch] $ClearTacview
 )
 
 class SkipTestException : Exception { }
@@ -276,7 +277,7 @@ try {
 	$savedGamesDirectory = Get-ItemPropertyValue -Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders" -Name "{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}"
 	$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath $WriteDir
 	# Clear tacview folder
-	if ($Headless -and (Test-Path $tacviewDirectory)) {
+	if ($ClearTacview -and $Headless -and (Test-Path $tacviewDirectory)) {
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item
 	}
 	$TrackDirectory = $TrackDirectory.Replace("\","/")

@@ -10,10 +10,16 @@ targetWindow = ahk_pid %1%
 delay = %2%
 SetKeyDelay %delay% ; Avoid delays between keystrokes.
 WinActivate, %targetWindow%
-WinWaitActive, %targetWindow%
-for n, param in A_Args {
-    IfGreater, n, 2
-    {
-        Send,%param%
-    }
+WinWaitActive, %targetWindow%,, 2
+if ErrorLevel
+{
+    return
+}
+else {
+	for n, param in A_Args {
+		IfGreater, n, 2
+		{
+			Send,%param%
+		}
+	}
 }

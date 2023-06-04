@@ -13,7 +13,7 @@ WinActivate, %targetWindow%
 WinWaitActive, %targetWindow%,, 2
 if ErrorLevel
 {
-    return
+    Exit 1
 }
 else {
 	for n, param in A_Args {

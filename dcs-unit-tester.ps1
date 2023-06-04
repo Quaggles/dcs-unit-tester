@@ -576,14 +576,23 @@ try {
 					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
 					# Use AutoHotkey script to tell DCS to increase time acceleration
 					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssersion) {
-						Write-Host "`t`tℹ️ Setting Time Acceleration to $($localTimeAcceleration)x"
 						# Argument 1 is PID, argument 2 is delay in ms
-						$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
+						#$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
+						$sendKeysArguments = @("1234555",$SetKeyDelay)
+						$keyboardId = (Get-Culture).KeyboardLayoutID
 						# ^z = Ctrl + Z
-						for ($i = 0; $i -lt ($localTimeAcceleration - 1); $i++) {
-							$sendKeysArguments += "^z"
+						$timeAccKey = "^z"
+						if ($keyboardId -eq 1031) { # German layout uses y in place of z
+							$timeAccKey = "^y"
 						}
-						Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments
+						for ($i = 0; $i -lt ($localTimeAcceleration - 1); $i++) {
+							$sendKeysArguments += $timeAccKey
+						}
+						Write-Host "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, KeyboardId: $keyboardId, using key: $timeAccKey"
+						$ahkProcess = Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments -PassThru -Wait
+						if ($ahkProcess.ExitCode -ne 0){
+							Write-Host "`t`t`t❌ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Red
+						}
 					}
 
 					# Wait for track to end loop

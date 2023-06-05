@@ -659,7 +659,7 @@ return dcs_extensions ~= nil
 							if ($extensionInstalled) { # If the extension is installed we can get timeAcc directly and ensure it is the correct speed
 								$timeAccel = GetAcceleration
 								# Set time accel with extension if it doesn't match, this is to account for track timeAcc cumulatively adding to localTimeAcceleration
-								if ($localTimeAcceleration -and ($timeAccel -ne $localTimeAcceleration) -and -not $InvertAssersion) {
+								if ($localTimeAcceleration -and $localTimeAcceleration -gt 1 -and ($timeAccel -ne $localTimeAcceleration) -and -not $InvertAssersion) {
 									SetAcceleration -TimeAcceleration $localTimeAcceleration
 								}
 							} else {

@@ -308,7 +308,12 @@ return dcs_extensions ~= nil
 			$ForegroundColor = 'white',
 			$BackgroundColor = 'black'
 		)
-		Write-Host "`r$text$(' '*(PadTextLength($text)))" -NoNewline:(!$NewLine) -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
+		if (-not $Headless) { # When in headless mode don't try to overwrite
+			$returnChar = "`r"
+		} else {
+			$returnChar = ""
+		}
+		Write-Host "$returnChar$text$(' '*(PadTextLength($text)))" -NoNewline:(-not $NewLine -and -not $Headless) -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
 	}
 	function PadTextLength {
 		param([string] $text)

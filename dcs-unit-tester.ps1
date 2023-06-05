@@ -170,6 +170,56 @@ try {
 			return $null;
 		}
 	}
+
+	function IsExtensionInstalled {
+		try {
+			return ($connector.SendReceiveCommandAsync(
+"
+local newPath = `";`"..lfs.writedir()..`"Mods\\Services\\DCS-Extensions\\bin\\?.dll`"
+if not string.find(package.cpath, newPath, 1, true) then
+	package.cpath = package.cpath..newPath
+end
+if not dcs_extensions then
+	dcs_extensions = require(`"dcs_extensions`")
+end
+return dcs_extensions ~= nil
+").GetAwaiter().GetResult().Result -eq 'true')
+		} catch [TimeoutException] {
+			return $false;
+		}
+	}
+
+	
+	function SetAcceleration {
+		param([Single]$TimeAcceleration)
+		try {
+			$result = ($connector.SendReceiveCommandAsync(
+				"if dcs_extensions and dcs_extensions.setAcceleration then dcs_extensions.setAcceleration($TimeAcceleration) end"
+			).GetAwaiter().GetResult())
+		} catch [TimeoutException] {
+			# Ignore
+		}
+	}
+	
+	function GetAcceleration {
+		try {
+			return ($connector.SendReceiveCommandAsync(
+				"if dcs_extensions and dcs_extensions.getAcceleration then return dcs_extensions.getAcceleration() else return 0 end"
+			).GetAwaiter().GetResult().Result)
+		} catch [TimeoutException] {
+			return 0;
+		}
+	}
+
+	function OnMenu {
+		try {
+			return ($connector.SendReceiveCommandAsync("return DCS.getSimulatorMode()").GetAwaiter().GetResult().Result -eq '1')
+		} catch [TimeoutException] {
+			return $null;
+		}
+	}
+
+
 	function KillDCS {
 		$dcsPid = $null
 		GetDCSRunning | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -574,37 +624,49 @@ try {
 						}
 					}
 					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
-					# Use AutoHotkey script to tell DCS to increase time acceleration
+
+					$extensionInstalled = IsExtensionInstalled					
 					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssersion) {
-						# Argument 1 is PID, argument 2 is delay in ms
-						#$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
-						$sendKeysArguments = @("1234555",$SetKeyDelay)
-						$keyboardId = (Get-Culture).KeyboardLayoutID
-						# ^z = Ctrl + Z
-						$timeAccKey = "^z"
-						if ($keyboardId -eq 1031) { # German layout uses y in place of z
-							$timeAccKey = "^y"
-						}
-						for ($i = 0; $i -lt ($localTimeAcceleration - 1); $i++) {
-							$sendKeysArguments += $timeAccKey
-						}
-						Write-Host "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, KeyboardId: $keyboardId, using key: $timeAccKey"
-						$ahkProcess = Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments -PassThru -Wait
-						if ($ahkProcess.ExitCode -ne 0){
-							Write-Host "`t`t`t❌ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Red
+						if ($extensionInstalled) { # If the extension is installed print this once and then continually keep up to date in job loop later
+							Write-Host "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, using extension"
+						} else { # Use AutoHotkey script to tell DCS to increase time acceleration
+							# Argument 1 is PID, argument 2 is delay in ms
+							$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
+							$keyboardId = (Get-Culture).KeyboardLayoutID
+							# ^z = Ctrl + Z
+							$timeAccKey = "^z"
+							if ($keyboardId -eq 1031) { # German layout uses y in place of z
+								$timeAccKey = "^y"
+							}
+							for ($i = 0; $i -lt ($localTimeAcceleration - 1); $i++) {
+								$sendKeysArguments += $timeAccKey
+							}
+							Write-Host "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, KeyboardId: $keyboardId, using key: $timeAccKey"
+							$ahkProcess = Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments -PassThru -Wait
+							if ($ahkProcess.ExitCode -ne 0){
+								Write-Host "`t`t`t❌ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Red
+							}
 						}
 					}
 
 					# Wait for track to end loop
 					$lastUpdate = [DateTime]::Now
-					$sleepTime = 1
+					$sleepTime = 0.5
 					while ((!$job.Finished) -or ((IsTrackPlaying -Mission:(-not $isTrack)) -ne $false)) {
 						$modelTime = [float](GetModelTime)
 						if ($modelTime -gt $lastModelTime) {
 							$lastUpdate = [DateTime]::Now
-							$timeAccel = ([float]$modelTime - [float]$lastModelTime) / [float]$sleepTime
-							if ($timeAccel -gt 0.75){
-								$timeAccel = [math]::Round($timeAccel)
+							if ($extensionInstalled) { # If the extension is installed we can get timeAcc directly and ensure it is the correct speed
+								$timeAccel = GetAcceleration
+								# Set time accel with extension if it doesn't match, this is to account for track timeAcc cumulatively adding to localTimeAcceleration
+								if ($localTimeAcceleration -and ($timeAccel -ne $localTimeAcceleration) -and -not $InvertAssersion) {
+									SetAcceleration -TimeAcceleration $localTimeAcceleration
+								}
+							} else {
+								$timeAccel = ([float]$modelTime - [float]$lastModelTime) / [float]$sleepTime
+								if ($timeAccel -gt 0.75){
+									$timeAccel = [math]::Round($timeAccel)
+								}
 							}
 						}
 						$lastUpdateDelta = (([DateTime]::Now - $lastUpdate).TotalSeconds)

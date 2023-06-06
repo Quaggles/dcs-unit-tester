@@ -28,6 +28,54 @@ param (
 	[switch] $ClearTacview
 )
 
+function Write-HostAnsi {
+	[CmdletBinding()]
+	param (
+		[Parameter()]
+		[ConsoleColor]
+		$BackgroundColor,
+		[Parameter()]
+		[ConsoleColor]
+		$ForegroundColor,
+		[Parameter()]
+		[switch]
+		$NoNewline,
+		[Parameter(Position = 0)]
+		[Object]
+		$Object
+	)
+	$ConsoleColors = @(
+		0x000000, #Black = 0
+		0x000080, #DarkBlue = 1
+		0x008000, #DarkGreen = 2
+		0x008080, #DarkCyan = 3
+		0x800000, #DarkRed = 4
+		0x800080, #DarkMagenta = 5
+		0x808000, #DarkYellow = 6
+		0xC0C0C0, #Gray = 7
+		0x808080, #DarkGray = 8
+		0x0000FF, #Blue = 9
+		0x00FF00, #Green = 10
+		0x00FFFF, #Cyan = 11
+		0xFF0000, #Red = 12
+		0xFF00FF, #Magenta = 13
+		0xFFFF00, #Yellow = 14
+		0xFFFFFF  #White = 15
+	)
+	$prefix = ""
+	if ($ForegroundColor) {
+		$prefix += $PSStyle.Foreground.FromRgb($ConsoleColors[[int]$ForegroundColor])		
+	}
+	if ($BackgroundColor) {
+		$prefix += $PSStyle.Background.FromRgb($ConsoleColors[[int]$BackgroundColor])
+	}
+	$content = $Object
+	if ($prefix) {
+		$content = "$prefix$Object$($PSStyle.Reset)"
+	}
+	Write-Host $content -NoNewline:$NoNewline
+}
+
 class SkipTestException : Exception { }
 
 $ErrorActionPreference = "Stop"
@@ -44,18 +92,18 @@ function Get-SafePath([string]$Path) {
 }
 try {
 	if (-Not $GamePath) {
-		Write-Host "No Game Path provided, attempting to retrieve from registry" -ForegroundColor Yellow -BackgroundColor Black
+		Write-HostAnsi "No Game Path provided, attempting to retrieve from registry" -ForegroundColor Yellow -BackgroundColor Black
 		$dcsExe = .$PSScriptRoot/dcs-find.ps1 -GetExecutable
 		if (Test-Path -LiteralPath $dcsExe) {
 			$GamePath = $dcsExe
-			Write-Host "`tFound Game Path at $dcsExe" -ForegroundColor Green -BackgroundColor Black
+			Write-HostAnsi "`tFound Game Path at $dcsExe" -ForegroundColor Green -BackgroundColor Black
 		}
 	else {
-			Write-Host "`tRegistry points to $dcsExe but file does not exist" -ForegroundColor Red -BackgroundColor Black
+			Write-HostAnsi "`tRegistry points to $dcsExe but file does not exist" -ForegroundColor Red -BackgroundColor Black
 		}
 	}
 	if (-Not $GamePath) {
-		Write-Host "`tDCS path not found in registry" -ForegroundColor Red -BackgroundColor Black
+		Write-HostAnsi "`tDCS path not found in registry" -ForegroundColor Red -BackgroundColor Black
 		exit 1
 	}
 
@@ -71,11 +119,11 @@ try {
 		if (Test-Path $trackDirectoryInput) {
 			$TrackDirectory = $trackDirectoryInput
 		} else {
-			Write-Host "Track Directory $TrackDirectory does not exist" -ForegroundColor Red -BackgroundColor Black
+			Write-HostAnsi "Track Directory $TrackDirectory does not exist" -ForegroundColor Red -BackgroundColor Black
 		}
 	}
 	if (-Not $TrackDirectory) {
-		Write-Host "No track directory path set" -ForegroundColor Red -BackgroundColor Black
+		Write-HostAnsi "No track directory path set" -ForegroundColor Red -BackgroundColor Black
 		exit 1
 	}
 
@@ -313,7 +361,7 @@ return dcs_extensions ~= nil
 		} else {
 			$returnChar = ""
 		}
-		Write-Host "$returnChar$text$(' '*(PadTextLength($text)))" -NoNewline:(-not $NewLine -and -not $Headless) -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
+		Write-HostAnsi "$returnChar$text$(' '*(PadTextLength($text)))" -NoNewline:(-not $NewLine -and -not $Headless) -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
 	}
 	function PadTextLength {
 		param([string] $text)
@@ -343,7 +391,7 @@ return dcs_extensions ~= nil
 	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -in ".trk",".miz" -and (-not $_.Name.StartsWith('.')) -and (-not $_.Name.StartsWith('LoadTest.'))})
 	$tracks = $loadTestTracks + $normalTracks
 	$trackCount = ($tracks | Measure-Object).Count
-	Write-Host "Found $($trackCount) tracks in $TrackDirectory"
+	Write-HostAnsi "Found $($trackCount) tracks in $TrackDirectory"
 	# Stores which modules passed the load test
 	$loadableModules = @{}
 	$trackProgress = 1
@@ -354,7 +402,7 @@ return dcs_extensions ~= nil
 	# Stack representing the subdirectory we are in, used for reporting correct nested test suites to TeamCity
 	$testSuiteStack = New-Object Collections.Generic.List[string]
 	if ($ReseedSeed) {
-		Write-Host "Track reseed seed is set to: $ReseedSeed"
+		Write-HostAnsi "Track reseed seed is set to: $ReseedSeed"
 	}
 	# Run the tracks
 	$tracks | ForEach-Object {
@@ -375,10 +423,10 @@ return dcs_extensions ~= nil
 		$configPathTemplate = Join-Path -Path (split-path $_.FullName -Parent) -ChildPath "/.base.json"
 		$configPath = [System.IO.Path]::ChangeExtension($_.FullName, ".json")
 		if (Test-Path -Path $configPath) {
-			Write-Host "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPath))"
+			Write-HostAnsi "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPath))"
 			$config = ConvertFrom-Json (Get-Content -Path $configPath -Raw)
 		} elseif (Test-Path -Path $configPathTemplate) {
-			Write-Host "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPathTemplate))"
+			Write-HostAnsi "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPathTemplate))"
 			$config = ConvertFrom-Json (Get-Content -Path $configPathTemplate -Raw)
 		}
 
@@ -413,7 +461,7 @@ return dcs_extensions ~= nil
 				}
 				if ($peek -ne $_) {
 					$testSuiteStack.RemoveAt($index)
-					Write-Host "##teamcity[testSuiteFinished name='$_']"
+					Write-HostAnsi "##teamcity[testSuiteFinished name='$_']"
 				}
 				$index = $index - 1
 			}
@@ -425,11 +473,11 @@ return dcs_extensions ~= nil
 					$peek = $testSuiteStack[$index]
 					if ($peek -ne $_) {
 						$testSuiteStack.Add($_)
-						Write-Host "##teamcity[testSuiteStarted name='$_']"
+						Write-HostAnsi "##teamcity[testSuiteStarted name='$_']"
 					}
 				} else {
 					$testSuiteStack.Add($_)
-					Write-Host "##teamcity[testSuiteStarted name='$_']"
+					Write-HostAnsi "##teamcity[testSuiteStarted name='$_']"
 				}
 				$index = $index + 1
 			}
@@ -437,7 +485,7 @@ return dcs_extensions ~= nil
 
 		# Report Test Start
 		if ($Headless) {
-			Write-Host "##teamcity[testStarted name='$testName' captureStandardOutput='true']"
+			Write-HostAnsi "##teamcity[testStarted name='$testName' captureStandardOutput='true']"
 		}
 		$stopwatch.Reset();
 		$stopwatch.Start();
@@ -449,7 +497,7 @@ return dcs_extensions ~= nil
 			if (-not $Config.PSObject.Properties) { return $OriginalValue }
 			$prop = $Config.PSObject.Properties[$VariableName]
 			if ($prop -and $prop.Value) {
-				Write-Host "`tℹ️ Config: $VariableName = $($prop.Value)"
+				Write-HostAnsi "`tℹ️ Config: $VariableName = $($prop.Value)"
 				return $prop.Value
 			} else {
 				return $OriginalValue
@@ -471,13 +519,13 @@ return dcs_extensions ~= nil
 			if ([string]::IsNullOrWhiteSpace($trackDescription)) {
 				throw "Description existed but was empty"
 			}
-			Write-Host "`t`t✅ $testType Description Retrieved: " -F Green
-			Write-Host $trackDescription
+			Write-HostAnsi "`t`t✅ $testType Description Retrieved: " -F Green
+			Write-HostAnsi $trackDescription
 		} catch {
-			Write-Host "`t`t❌ Failed to get $testType description: $_" -F Red
+			Write-HostAnsi "`t`t❌ Failed to get $testType description: $_" -F Red
 		}
 		if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
-			Write-Host "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
+			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
 		}
 
 		# Retrieve player aircraft from track
@@ -487,20 +535,20 @@ return dcs_extensions ~= nil
 			if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
 				throw "Player aircraft type could not be retrieved"
 			}
-			Write-Host "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
+			Write-HostAnsi "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
 		} catch {
-			Write-Host "`t`t❌ Failed to get player aircraft type: $_" -F Red
+			Write-HostAnsi "`t`t❌ Failed to get player aircraft type: $_" -F Red
 		}
 		if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
-			Write-Host "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
+			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
 		}
 
 		# Update track
 		if ($UpdateTracks) {
 			# Update scripts in the mission incase the source scripts updated
-			if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+			if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
-			if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+			if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 		}
 		$skipped = $false
@@ -522,14 +570,14 @@ return dcs_extensions ~= nil
 				}
 				# Progress report
 				if ($Headless) {
-					Write-Host "##teamcity[progressMessage '$progressMessage']"
+					Write-HostAnsi "##teamcity[progressMessage '$progressMessage']"
 				} else {
-					Write-Host $progressMessage
+					Write-HostAnsi $progressMessage
 				}
 
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
-					Write-Host "`t`t✅ Starting DCS" -F Green
+					Write-HostAnsi "`t`t✅ Starting DCS" -F Green
 					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
 					sleep 5
 				} else { # Fallback if we didn't start the process
@@ -547,8 +595,8 @@ return dcs_extensions ~= nil
 						$oldSeed = (GetSeed -Path $_.FullName)
 						$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
 						Set-Content -Path $temp -Value $randomSeed
-						Write-Host "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
-						if (!$Headless) { Write-Host "`t`tℹ️ " -NoNewline }
+						Write-HostAnsi "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
+						if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
 						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile $temp -Destination "track_data/seed"
 					} finally {
 						Remove-Item -Path $temp
@@ -559,10 +607,10 @@ return dcs_extensions ~= nil
 					$output = New-Object -TypeName "System.Collections.Generic.List``1[[System.String]]";
 					if ($failureCount -gt 0) {
 						$duration = $RetrySleepDuration
-						Write-Host "`t`t🕑 Last attempt crashed, sleeping for ${duration}s before load" -F Yellow
+						Write-HostAnsi "`t`t🕑 Last attempt crashed, sleeping for ${duration}s before load" -F Yellow
 						Start-Sleep -Seconds $duration
 					}
-					Write-Host "`t`t✅ Commanding DCS to load $testType" -F Green
+					Write-HostAnsi "`t`t✅ Commanding DCS to load $testType" -F Green
 					LoadTrack -TrackPath $tempTrackPath -Multiplayer:$isMultiplayer
 					# Set up endpoint and start listening
 					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
@@ -631,7 +679,7 @@ return dcs_extensions ~= nil
 					$extensionInstalled = IsExtensionInstalled					
 					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssersion) {
 						if ($extensionInstalled) { # If the extension is installed print this once and then continually keep up to date in job loop later
-							Write-Host "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, using extension"
+							Write-HostAnsi "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, using extension"
 						} else { # Use AutoHotkey script to tell DCS to increase time acceleration
 							# Argument 1 is PID, argument 2 is delay in ms
 							$sendKeysArguments = @("$dcsPid",$SetKeyDelay)
@@ -644,10 +692,10 @@ return dcs_extensions ~= nil
 							for ($i = 0; $i -lt ($localTimeAcceleration - 1); $i++) {
 								$sendKeysArguments += $timeAccKey
 							}
-							Write-Host "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, KeyboardId: $keyboardId, using key: $timeAccKey"
+							Write-HostAnsi "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, KeyboardId: $keyboardId, using key: $timeAccKey"
 							$ahkProcess = Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments -PassThru -Wait
 							if ($ahkProcess.ExitCode -ne 0){
-								Write-Host "`t`t`t❌ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Red
+								Write-HostAnsi "`t`t`t❌ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Red
 							}
 						}
 					}
@@ -705,7 +753,7 @@ return dcs_extensions ~= nil
 				}
 				$resultSet = $false
 				# Attempt to find the unit test assersion output line
-				Write-Host "`t`t📄 Output:"
+				Write-HostAnsi "`t`t📄 Output:"
 				$output | ForEach-Object {
 					if ($_ -match '^DUT_ASSERSION=(true|false)$') {
 						$result = [Boolean]::Parse($Matches[1])
@@ -717,10 +765,10 @@ return dcs_extensions ~= nil
 							Add-Content -Path $newPath -Value $Matches[1] 
 						}
 					} 
-					Write-Host "`t`t    $_"
+					Write-HostAnsi "`t`t    $_"
 				}
 				if ($Headless) {
-					Write-Host "##teamcity[testMetadata testName='$testName' name='DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
+					Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
 				}
 				if ($resultSet -eq $false) {
 					throw "$testType did not send an assersion result, maybe crash?, assuming failed"
@@ -732,30 +780,30 @@ return dcs_extensions ~= nil
 				if ($Headless) { # Record log file as artifact
 					$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath.log"
 					$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
-					Write-Host "Recording DCS log as artifact, will copy to $tempLog"
+					Write-HostAnsi "Recording DCS log as artifact, will copy to $tempLog"
 					Copy-Item -LiteralPath (Join-Path -Path $writeDirFull -ChildPath "Logs/dcs.log") -Destination $tempLog
 					$tempArtifacts += $tempLog
-					Write-Host "##teamcity[publishArtifacts '$tempLog']"
-					Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
+					Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
+					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
 				}
-				Write-Host "`n`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
+				Write-HostAnsi "`n`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
 				KillDCS
 				$failureCount = $failureCount + 1
 			}
 			if ($InvertAssersion) {
-				Write-Host "`t📄 Inverting Result was $result now $(!$result)"
+				Write-HostAnsi "`t📄 Inverting Result was $result now $(!$result)"
 				$result = (!$result)
 			}
 			if ($resultSet -eq $true) {
 				if ($result -eq $TRUE){
 					$successCount = $successCount + 1
 					if ($PassModeShortCircuit -and $localPassMode -eq "Any" -or ($localPassMode -eq "Majority" -and $successCount -gt ($localRerunCount/2))) {
-						Write-Host "`t`t Skipping remaining reruns because PassMode:$localPassMode has determined the final result via short circuit"
+						Write-HostAnsi "`t`t Skipping remaining reruns because PassMode:$localPassMode has determined the final result via short circuit"
 						break
 					}
 				} else {
 					if ($PassModeShortCircuit -and $localPassMode -eq "All") {
-						Write-Host "`t`t Skipping remaining reruns because PassMode:$localPassMode has determined the final result via short circuit"
+						Write-HostAnsi "`t`t Skipping remaining reruns because PassMode:$localPassMode has determined the final result via short circuit"
 						break
 					}
 				}
@@ -775,44 +823,44 @@ return dcs_extensions ~= nil
 		}
 		$passMessage = "PassMode:$localPassMode [$successCount/$localRerunCount] {0:P0}" -f ($successCount/$localRerunCount)
 		if ($skipped) {
-			Write-Host "`t➡️ Test ($trackProgress/$trackCount) Skipped, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
-			if ($Headless) { Write-Host "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
+			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
+			if ($Headless) { Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
 		} elseif ($result -eq $TRUE) {
-			Write-Host "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
+			Write-HostAnsi "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
 			$trackSuccessCount = $trackSuccessCount + 1
 		} else {
-			Write-Host "`t❌ Test ($trackProgress/$trackCount) Failed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
-			if ($Headless) { Write-Host "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
+			Write-HostAnsi "`t❌ Test ($trackProgress/$trackCount) Failed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
+			if ($Headless) { Write-HostAnsi "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
 		# Record the load test result in a dictionary
 		if ($isLoadTest) {
 			if ($result -eq $TRUE){
-				Write-Host "`t✅ Load test for $playerAircraftType set to $result" -ForegroundColor Green
+				Write-HostAnsi "`t✅ Load test for $playerAircraftType set to $result" -ForegroundColor Green
 			} else {
-				Write-Host "`t❌ Load test for $playerAircraftType set to $result" -ForegroundColor Red
+				Write-HostAnsi "`t❌ Load test for $playerAircraftType set to $result" -ForegroundColor Red
 			}
 			$loadableModules[$playerAircraftType] = $result
 		}
-		if ($Headless) { Write-Host "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
+		if ($Headless) { Write-HostAnsi "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 
 		if ($Headless) {
 			# Record tacview artifact
 			if (Test-Path $tacviewDirectory) {
 				$tacviewPath = gci "$tacviewDirectory\Tacview-*$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
 				if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
-					Write-Host "Tacview found for $testName at $tacviewPath"
-					Write-Host "##teamcity[publishArtifacts '$tacviewPath']"
+					Write-HostAnsi "Tacview found for $testName at $tacviewPath"
+					Write-HostAnsi "##teamcity[publishArtifacts '$tacviewPath']"
 					$artifactPath = split-path $tacviewPath -leaf
-					Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
+					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
 				} else {
-					Write-Host "Tacview not found for $testName"
+					Write-HostAnsi "Tacview not found for $testName"
 				}
 			}
 			# If test failed upload the track as an artifact
 			if ($result -eq $false) {
-				Write-Host "##teamcity[publishArtifacts '$($tempTrackPath)']"
+				Write-HostAnsi "##teamcity[publishArtifacts '$($tempTrackPath)']"
 				$artifactPath = split-path $tempTrackPath -leaf
-				Write-Host "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
+				Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
 			}
 		}
 		
@@ -822,7 +870,7 @@ return dcs_extensions ~= nil
 				throw [TimeoutException] "DCS did not return to main menu"
 			}
 		} catch {
-			Write-Host "`t❌ $($_.ToString()), Restarting DCS" -ForegroundColor Red
+			Write-HostAnsi "`t❌ $($_.ToString()), Restarting DCS" -ForegroundColor Red
 			KillDCS
 		}
 
@@ -832,7 +880,7 @@ return dcs_extensions ~= nil
 	# We're finished so finish the test suites
 	if ($Headless) {
 		$testSuiteStack | Sort-Object -Descending {(++$script:i)} | % {
-			Write-Host "##teamcity[testSuiteFinished name='$_']"
+			Write-HostAnsi "##teamcity[testSuiteFinished name='$_']"
 		}
 	}
 	if ($QuitDcsOnFinish){
@@ -843,13 +891,13 @@ return dcs_extensions ~= nil
 			#Ignore errors
 		}
 	}
-	Write-Host "Finished, passed tests: " -NoNewline
+	Write-HostAnsi "Finished, passed tests: " -NoNewline
 	if ($trackSuccessCount -eq $trackCount){
-		Write-Host "✅ [$trackSuccessCount/$trackCount]" -F Green -B Black -NoNewline
+		Write-HostAnsi "✅ [$trackSuccessCount/$trackCount]" -F Green -B Black -NoNewline
 	} else {
-		Write-Host "❌ [$trackSuccessCount/$trackCount]" -F Red -B Black -NoNewline
+		Write-HostAnsi "❌ [$trackSuccessCount/$trackCount]" -F Red -B Black -NoNewline
 	}
-	Write-Host " in $($globalStopwatch.Elapsed.ToString('hh\:mm\:ss'))";
+	Write-HostAnsi " in $($globalStopwatch.Elapsed.ToString('hh\:mm\:ss'))";
 	if (-not $Headless -and (Get-ExecutionPolicy -Scope Process) -eq 'Bypass'){
 		Read-Host "Press enter to exit"
 	}

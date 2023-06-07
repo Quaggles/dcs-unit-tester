@@ -522,7 +522,7 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "`t`t✅ $testType Description Retrieved: " -F Green
 			Write-HostAnsi $trackDescription
 		} catch {
-			Write-HostAnsi "`t`t❌ Failed to get $testType description: $_" -F Red
+			Write-HostAnsi "`t`t⚠️ Failed to get $testType description: $_" -F Yellow
 		}
 		if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
 			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
@@ -537,7 +537,7 @@ return dcs_extensions ~= nil
 			}
 			Write-HostAnsi "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
 		} catch {
-			Write-HostAnsi "`t`t❌ Failed to get player aircraft type: $_" -F Red
+			Write-HostAnsi "`t`t⚠️ Failed to get player aircraft type: $_" -F Yellow
 		}
 		if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
 			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
@@ -695,7 +695,7 @@ return dcs_extensions ~= nil
 							Write-HostAnsi "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, KeyboardId: $keyboardId, using key: $timeAccKey"
 							$ahkProcess = Start-Process -FilePath "$PSScriptRoot/SendKeys.exe" -ArgumentList $sendKeysArguments -PassThru -Wait
 							if ($ahkProcess.ExitCode -ne 0){
-								Write-HostAnsi "`t`t`t❌ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Red
+								Write-HostAnsi "`t`t`t⚠️ Coudn't set DCS window as active, time acceleration not set" -ForegroundColor Yellow
 							}
 						}
 					}
@@ -823,7 +823,7 @@ return dcs_extensions ~= nil
 		}
 		$passMessage = "PassMode:$localPassMode [$successCount/$localRerunCount] {0:P0}" -f ($successCount/$localRerunCount)
 		if ($skipped) {
-			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
+			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
 			if ($Headless) { Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
 		} elseif ($result -eq $TRUE) {
 			Write-HostAnsi "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black

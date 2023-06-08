@@ -770,7 +770,7 @@ return dcs_extensions ~= nil
 					Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='DCS restarts required' type='number' value='$(TeamCitySafeString -Value $failureCount)']"
 				}
 				if ($resultSet -eq $false) {
-					throw "$testType did not send an assersion result, maybe crash?, assuming failed"
+					throw "$testType did not send an assertion result, maybe crash?, assuming failed"
 				}
 				$runCount = $runCount + 1
 			} catch {

@@ -6,7 +6,7 @@ param (
 	[string] $GamePath, # Path to the game executable e.g. C:/DCS World/bin/dcs.exe
 	[string] $TrackDirectory, # Filter for the tracks
 	[switch] $QuitDcsOnFinish,
-	[switch] $InvertAssersion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
+	[switch] $InvertAssertion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
 	[switch] $UpdateTracks = $true, # Update scripts in the track file with those from MissionScripts/
 	[switch] $Reseed, # Regenerate the track seed before playing
 	[int] $ReseedSeed = [Environment]::TickCount, # Seed used for generating random seeds
@@ -638,7 +638,7 @@ return dcs_extensions ~= nil
 					$stream = $data.GetStream() 
 
 					# If we're doing false negative testing end the mission after 1 second to see if it returns false
-					if ($InvertAssersion) {
+					if ($InvertAssertion) {
 						sleep 1
 						try {
 							$connector.SendReceiveCommandAsync("DCS.stopMission()").GetAwaiter().GetResult() | out-null
@@ -676,7 +676,7 @@ return dcs_extensions ~= nil
 					$job = Start-ThreadJob -ScriptBlock $tcpListenScriptBlock -ArgumentList $stream,$output -StreamingHost $Host
 
 					$extensionInstalled = IsExtensionInstalled					
-					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssersion) {
+					if ($dcsPid -and $localTimeAcceleration -and -not $InvertAssertion) {
 						if ($extensionInstalled) { # If the extension is installed print this once and then continually keep up to date in job loop later
 							Write-HostAnsi "`t`tℹ️ Setting time acceleration to $($localTimeAcceleration)x, using extension"
 						} else { # Use AutoHotkey script to tell DCS to increase time acceleration
@@ -709,7 +709,7 @@ return dcs_extensions ~= nil
 							if ($extensionInstalled) { # If the extension is installed we can get timeAcc directly and ensure it is the correct speed
 								$timeAccel = GetAcceleration
 								# Set time accel with extension if it doesn't match, this is to account for track timeAcc cumulatively adding to localTimeAcceleration
-								if ($localTimeAcceleration -and $localTimeAcceleration -gt 1 -and ($timeAccel -ne $localTimeAcceleration) -and -not $InvertAssersion) {
+								if ($localTimeAcceleration -and $localTimeAcceleration -gt 1 -and ($timeAccel -ne $localTimeAcceleration) -and -not $InvertAssertion) {
 									SetAcceleration -TimeAcceleration $localTimeAcceleration
 								}
 							} else {
@@ -731,7 +731,7 @@ return dcs_extensions ~= nil
 							throw [TimeoutException] ("DCS $testType Unresponsive, last heard from {0:N1} seconds ago, breached {1}s timeout" -f $lastUpdateDelta,$TrackPingTimeout)
 						}
 						if ((-not $isTrack) -and ($modelTime -gt $MissionPlayTimeout)){
-							throw [TimeoutException] ("DCS $testType has ran for {0:N1} seconds without reporting an assersion, this is longer than the MissionPlayTimeout of {1:N1} seconds, aborting..." -f $modelTime,$MissionPlayTimeout)
+							throw [TimeoutException] ("DCS $testType has ran for {0:N1} seconds without reporting an assertion, this is longer than the MissionPlayTimeout of {1:N1} seconds, aborting..." -f $modelTime,$MissionPlayTimeout)
 						}
 						$lastModelTime = $modelTime
 						# Throttle so DCS isn't checked too often
@@ -751,7 +751,7 @@ return dcs_extensions ~= nil
 					}
 				}
 				$resultSet = $false
-				# Attempt to find the unit test assersion output line
+				# Attempt to find the unit test assertion output line
 				Write-HostAnsi "`t`t📄 Output:"
 				$output | ForEach-Object {
 					if ($_ -match '^DUT_ASSERSION=(true|false)$') {
@@ -789,7 +789,7 @@ return dcs_extensions ~= nil
 				KillDCS
 				$failureCount = $failureCount + 1
 			}
-			if ($InvertAssersion) {
+			if ($InvertAssertion) {
 				Write-HostAnsi "`t📄 Inverting Result was $result now $(!$result)"
 				$result = (!$result)
 			}

@@ -32,7 +32,7 @@ Now the track can be replayed whenever a new patch is released and report as a f
 
 The system can only test against things that exist in the mission lua environment, it cannot for example tell you if something looks visually wrong in the aircraft, tests need to be structured so they result in a quantifiable result that can be measured.
 
-For example you could test waypoint entry and coupled autopilot modes by configuring everything and then having a an assersion that the aircraft has to fly within a 500m zone around the waypoint before a time expires. You cannot test things like "Is the CCIP reticule accurate" because by replaying the player actions even if the reticule was broken they would fly the aircraft to the same positon every time.
+For example you could test waypoint entry and coupled autopilot modes by configuring everything and then having a an assertion that the aircraft has to fly within a 500m zone around the waypoint before a time expires. You cannot test things like "Is the CCIP reticule accurate" because by replaying the player actions even if the reticule was broken they would fly the aircraft to the same positon every time.
 
 ## How to create a test (Quick)
 
@@ -49,7 +49,7 @@ When creating tests remove as many variables from each test as possible and make
 
 These are the types of considerations you should make when creating your tests if you want them to work across versions and be as consistent as possible which is after all the whole point of the tests. I've done some tests of CCRP bombing that break some of these rules by having the player aircraft start in active pause, I configure all systems, then escape active pause with the aircraft in an autopilot mode to fly straight, the aircraft is placed roughly 10 seconds before the CCRP release point so a minimum amount of entropy is introduced by the flight model. This has worked so far without issue but I would avoid any flight model interaction if possible.
 
-Once your test mission is ready play through it once and successfully satisfy the assersion (Shoot the red unit), save the track and then it can be loaded by the unit tester.
+Once your test mission is ready play through it once and successfully satisfy the assertion (Shoot the red unit), save the track and then it can be loaded by the unit tester.
 
 ## How to create a test (Detailed)
 
@@ -115,8 +115,8 @@ For a full list of parameters read: [PowerShell Parameters](#powershell-paramete
 
 The supported extensions are:
 * <b>.trk</b> - Runs as a track file, ends when the track ends (Useful for testing the modules)
-* <b>.miz</b> - Runs in singleplayer mission file, ends when test returns the assersion (Useful for testing scripting functions and AI)
-* <b>.mp.miz</b> - Runs as a multiplayer server, ends when test returns the assersion (Useful for testing scripting functions and AI)
+* <b>.miz</b> - Runs in singleplayer mission file, ends when test returns the assertion (Useful for testing scripting functions and AI)
+* <b>.mp.miz</b> - Runs as a multiplayer server, ends when test returns the assertion (Useful for testing scripting functions and AI)
 
 ### 5. Observe
 
@@ -148,7 +148,7 @@ RerunCount|1|How many times the track will be run, used in combination with Pass
 PassMode|All|Possible values:<br><b>All</b>: All runs of the test must pass for the test to report success<br><b>Majority</b>: Greater than 50% test runs must pass for the test to report success<br><b>Any</b>: At least 1 test run must pass for the test to report success<br><b>Last</b>: The result from the final test run is reported
 PassModeShortCircuit|false|If enabled prevents rerunning a test more times than needed once the PassMode has been satisfied, for example with `PassMode:All` if a single test fails no more are run and the result is reported as failed immediately, helps cut down on test execution time
 TimeAcceleration|1|Sets the time acceleration in each track to reduce runtime, done using AutoHotKey which sends presses of `Ctrl + Z` once the track is playing, set this to a sane number for your hardware, for complex tests above 8x on slow computers can cause track desync. This parameter overrides any time acceleration that was recorded in the track
-InvertAssersion|false|If enabled tests for false negatives (A test reports success if nothing happened), will end the tests after 1 second and fail them if they report true
+InvertAssertion|false|If enabled tests for false negatives (A test reports success if nothing happened), will end the tests after 1 second and fail them if they report true
 
 To override these parameters on a per test basis read: [Local track config files](#local-track-config-files)
 
@@ -225,6 +225,6 @@ You could use something like this if you have a very long running test that you 
 
 This probably means you haven't installed the mod `DCS Unit Tester Mod - Enable SSE LuaSocket.zip` using OVGME, the mission will give you errors if it's not installed
 
-### Testing mission assersions live
+### Testing mission assertions live
 
 You can run [Receive-TCPMessage.ps1](/Receive-TCPMessage.ps1) with PowerShell while recording your track or running the tracks manually to get a live output of what your test is sending without having to run the full tester

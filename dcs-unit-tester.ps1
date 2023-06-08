@@ -571,9 +571,8 @@ return dcs_extensions ~= nil
 				# Progress report
 				if ($Headless) {
 					Write-HostAnsi "##teamcity[progressMessage '$progressMessage']"
-				} else {
-					Write-HostAnsi $progressMessage
 				}
+				Write-HostAnsi $progressMessage
 
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
@@ -823,7 +822,7 @@ return dcs_extensions ~= nil
 		}
 		$passMessage = "PassMode:$localPassMode [$successCount/$localRerunCount] {0:P0}" -f ($successCount/$localRerunCount)
 		if ($skipped) {
-			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
+			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped (Aircraft type failed LoadTest), $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
 			if ($Headless) { Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
 		} elseif ($result -eq $TRUE) {
 			Write-HostAnsi "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black

@@ -599,7 +599,7 @@ return dcs_extensions ~= nil
 						if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
 						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile $temp -Destination "track_data/seed"
 					} finally {
-						Remove-Item -Path $temp
+						Remove-Item -Path $temp -ErrorAction SilentlyContinue
 					}
 				}
 
@@ -904,11 +904,20 @@ return dcs_extensions ~= nil
 } finally {
 	if ($Headless) {
 		$tempArtifacts | % {
-			Remove-Item $_
+			$item = $_
+			try {
+				Remove-Item $item
+			} catch {
+				Write-HostAnsi "❌ Failed to remove temp artifact `"$item`", reason:`n$_" -F Red
+			}
 		}
 	}
 	if ($tempTrackPath -and (Test-Path -LiteralPath $tempTrackPath)) {
-		Remove-Item $tempTrackPath
+		try {
+			Remove-Item $tempTrackPath
+		} catch {
+			Write-HostAnsi "❌ Failed to remove temp track `"$tempTrackPath`", reason:`n$_" -F Red
+		}
 	}
 	if ($connector) { $connector.Dispose() }
 }

@@ -785,7 +785,7 @@ return dcs_extensions ~= nil
 					Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
 					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
 				}
-				Write-HostAnsi "`n`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)" -ForegroundColor Red
+				Write-HostAnsi "`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)`n$($_.ScriptStackTrace)" -ForegroundColor Red
 				KillDCS
 				$failureCount = $failureCount + 1
 			}
@@ -821,6 +821,19 @@ return dcs_extensions ~= nil
 			$result = ($resultSet -eq $true -and $result -eq $TRUE)
 		}
 		$passMessage = "PassMode:$localPassMode [$successCount/$localRerunCount] {0:P0}" -f ($successCount/$localRerunCount)
+
+		# Calculate failure reason
+		if ($resultSet -eq $false) {
+			$failureReason = "Crash"
+		} elseif ($resultSet -eq $true -and $result -eq $false) {
+			$failureReason = "Assertion"
+		} else {
+			$failureReason = "None"
+		}
+		if ($Headless -and $failureReason) {
+			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='FailureReason' value='$(TeamCitySafeString -Value $failureReason)']"
+		}
+
 		if ($skipped) {
 			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped (Aircraft type failed LoadTest), $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
 			if ($Headless) { Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
@@ -828,7 +841,7 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
 			$trackSuccessCount = $trackSuccessCount + 1
 		} else {
-			Write-HostAnsi "`t❌ Test ($trackProgress/$trackCount) Failed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
+			Write-HostAnsi "`t❌ Test ($trackProgress/$trackCount) Failed ($failureReason), $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Red -BackgroundColor Black
 			if ($Headless) { Write-HostAnsi "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
 		# Record the load test result in a dictionary

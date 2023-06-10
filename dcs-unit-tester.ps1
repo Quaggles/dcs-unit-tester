@@ -413,11 +413,14 @@ return dcs_extensions ~= nil
 		# Get track information
 		$track = $_
 
+		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
+
 		# Create a temporary copy of the track for modification and sending to DCS
-		$tempTrackPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath (Get-SafePath -Path ($_.Name))
+		$tempTrackDirectory = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath "dcs-unit-tester/"
+		New-Item -ItemType Directory -Force -Path $tempTrackDirectory | Out-Null
+		$tempTrackPath = Join-Path -Path $tempTrackDirectory -ChildPath (Get-SafePath -Path ($relativeTestPath.TrimStart("..\")))
 		Copy-Item -LiteralPath ($_.FullName) -Destination $tempTrackPath
 
-		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$config = $null
 		$configPathTemplate = Join-Path -Path (split-path $_.FullName -Parent) -ChildPath "/.base.json"

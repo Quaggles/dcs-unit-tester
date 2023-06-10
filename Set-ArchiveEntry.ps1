@@ -42,7 +42,7 @@ BEGIN {
 PROCESS {
     Using-Object ($zip = [System.IO.Compression.ZipFile]::Open($Archive, [System.IO.Compression.ZipArchiveMode]::Update)) {
         $entry = $zip.GetEntry($Destination)
-        $relativeArchivePath = $([Path]::GetRelativePath($pwd, $Archive))
+        $relativeArchivePath = (Get-Item $Archive).Name
         if ($entry) {
             if ($PSCmdlet.ShouldProcess($Archive)) {
                 $entry.Delete();

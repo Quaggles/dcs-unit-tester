@@ -898,14 +898,6 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "##teamcity[testSuiteFinished name='$_']"
 		}
 	}
-	if ($QuitDcsOnFinish){
-		sleep 2
-		try {
-			$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
-		} catch {
-			#Ignore errors
-		}
-	}
 	Write-HostAnsi "Finished, passed tests: " -NoNewline
 	if ($trackSuccessCount -eq $trackCount){
 		Write-HostAnsi "✅ [$trackSuccessCount/$trackCount]" -F Green -B Black -NoNewline
@@ -933,6 +925,17 @@ return dcs_extensions ~= nil
 		} catch {
 			Write-HostAnsi "❌ Failed to remove temp track `"$tempTrackPath`", reason:`n$_" -F Red
 		}
+	}	
+	if ($QuitDcsOnFinish) {
+		Write-HostAnsi "Now quitting DCS on finish" 
+		sleep 2
+		try {
+			$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
+		} catch {
+			#Ignore errors
+		}
+		sleep 5
+		KillDCS
 	}
 	if ($connector) { $connector.Dispose() }
 }

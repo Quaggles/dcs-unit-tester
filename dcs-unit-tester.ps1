@@ -4,7 +4,7 @@ using namespace System.Diagnostics
 using namespace System.Text.Json
 param (
 	[string] $GamePath, # Path to the game executable e.g. C:/DCS World/bin/dcs.exe
-	[string] $TrackDirectory, # Filter for the tracks
+	[string[]] $TrackDirectory, # Filter for the tracks
 	[switch] $QuitDcsOnFinish,
 	[switch] $InvertAssertion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
 	[switch] $UpdateTracks = $true, # Update scripts in the track file with those from MissionScripts/
@@ -383,15 +383,15 @@ return dcs_extensions ~= nil
 	if ($ClearTacview -and $Headless -and (Test-Path $tacviewDirectory)) {
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item
 	}
-	$TrackDirectory = $TrackDirectory.Replace("\","/")
 	# Gets all the tracks in the track directory that do not start with a .
 	# Load Test tracks must be run first
 	$loadTestTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and ($_.Name.StartsWith('LoadTest.'))})
 	# Regular tests are run last
 	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -in ".trk",".miz" -and (-not $_.Name.StartsWith('.')) -and (-not $_.Name.StartsWith('LoadTest.'))})
 	$tracks = $loadTestTracks + $normalTracks
+	$tracks = $tracks | Select-Object -Unique # Remove duplicates
 	$trackCount = ($tracks | Measure-Object).Count
-	Write-HostAnsi "Found $($trackCount) tracks in $TrackDirectory"
+	Write-HostAnsi "Found $($trackCount) tracks in ($($TrackDirectory -join ", "))"
 	# Stores which modules passed the load test
 	$loadableModules = @{}
 	$trackProgress = 1

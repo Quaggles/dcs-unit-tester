@@ -541,6 +541,7 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
 		} catch {
 			Write-HostAnsi "`t`t⚠️ Failed to get player aircraft type: $_" -F Yellow
+			$playerAircraftType = $null
 		}
 		if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
 			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
@@ -556,7 +557,7 @@ return dcs_extensions ~= nil
 		}
 		$skipped = $false
 		# Skip test if load test failed
-		if (-not $isLoadTest -and $loadableModules[$playerAircraftType] -eq $false){
+		if ((-not $isLoadTest) -and ($null -ne $playerAircraftType) -and ($loadableModules[$playerAircraftType] -eq $false)){
 			$runCount = $localRerunCount + 1
 			$skipped = $true
 		}

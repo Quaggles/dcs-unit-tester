@@ -781,13 +781,17 @@ return dcs_extensions ~= nil
 				$resultSet = $false
 				$result = $false
 				if ($Headless) { # Record log file as artifact
-					$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath.log"
-					$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
-					Write-HostAnsi "Recording DCS log as artifact, will copy to $tempLog"
-					Copy-Item -LiteralPath (Join-Path -Path $writeDirFull -ChildPath "Logs/dcs.log") -Destination $tempLog
-					$tempArtifacts += $tempLog
-					Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
-					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
+    					try {
+						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath.log"
+						$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+						Write-HostAnsi "Recording DCS log as artifact, will copy to $tempLog"
+						Copy-Item -LiteralPath (Join-Path -Path $writeDirFull -ChildPath "Logs/dcs.log") -Destination $tempLog
+						$tempArtifacts += $tempLog
+						Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
+						Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
+     					} catch {
+						Write-HostAnsi "`t`t❌ Failed to record log artifact: $_" -F Red
+   					}
 				}
 				Write-HostAnsi "`t`t❌ Error on attempt ($failureCount/$localRetryLimit): $($_.ToString()), Restarting DCS`n$($_.ScriptStackTrace)`n$($_.ScriptStackTrace)" -ForegroundColor Red
 				KillDCS
@@ -860,23 +864,31 @@ return dcs_extensions ~= nil
 		if ($Headless) { Write-HostAnsi "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 
 		if ($Headless) {
-			# Record tacview artifact
-			if (Test-Path $tacviewDirectory) {
-				$tacviewPath = gci "$tacviewDirectory\Tacview-*$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
-				if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
-					Write-HostAnsi "Tacview found for $testName at $tacviewPath"
-					Write-HostAnsi "##teamcity[publishArtifacts '$tacviewPath']"
-					$artifactPath = split-path $tacviewPath -leaf
-					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
-				} else {
-					Write-HostAnsi "Tacview not found for $testName"
+			try {
+				# Record tacview artifact
+				if (Test-Path $tacviewDirectory) {
+					$tacviewPath = gci "$tacviewDirectory\Tacview-*$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
+					if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
+						Write-HostAnsi "Tacview found for $testName at $tacviewPath"
+						Write-HostAnsi "##teamcity[publishArtifacts '$tacviewPath']"
+						$artifactPath = split-path $tacviewPath -leaf
+						Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
+					} else {
+						Write-HostAnsi "Tacview not found for $testName"
+					}
 				}
+			} catch {
+				Write-HostAnsi "`t`t❌ Failed to record tacview artifact: $_" -F Red
 			}
-			# If test failed upload the track as an artifact
-			if ($result -eq $false) {
-				Write-HostAnsi "##teamcity[publishArtifacts '$($tempTrackPath)']"
-				$artifactPath = split-path $tempTrackPath -leaf
-				Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
+			try {
+				# If test failed upload the track as an artifact
+				if ($result -eq $false) {
+					Write-HostAnsi "##teamcity[publishArtifacts '$($tempTrackPath)']"
+					$artifactPath = split-path $tempTrackPath -leaf
+					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
+				}
+			} catch {
+				Write-HostAnsi "`t`t❌ Failed to record track artifact: $_" -F Red
 			}
 		}
 		

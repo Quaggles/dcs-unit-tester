@@ -147,7 +147,7 @@ for _, file in pairs(missionEditor.recursiveDir(searchDirectory, nil, false)) do
         for k,v in pairs(types) do
             UnitTypeSetter(v)
             MissionEditor.SerializeTo(tempDir, 'mission', mission)
-            local newFileName = "LoadTest."..v..".trk"
+            local newFileName = v..".loadtest.trk"
             MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
         end
         missionEditor.Clean(tempDir)
@@ -161,7 +161,7 @@ for _, file in pairs(missionEditor.recursiveDir(searchDirectory, nil, false)) do
         for k,v in pairs(types) do
             UnitTypeSetter(v)
             MissionEditor.SerializeTo(tempDir, 'mission', mission)
-            local newFileName = "LoadTest."..v..".trk"
+            local newFileName = v..".loadtest.trk"
             MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
         end
         missionEditor.Clean(tempDir)

@@ -135,7 +135,7 @@ try {
 
 	function GetProcessRunning {
 		param($Path)
-		return Get-Process (GetProcessFromPath $Path) -ErrorAction SilentlyContinue | where {(-not [string]::IsNullOrWhiteSpace($_.CommandLine)) -and $_.CommandLine.Replace("`"", "").Contains("-w $WriteDir")}
+		return Get-Process (GetProcessFromPath $Path) -ErrorAction SilentlyContinue | where {($_ -ne $null) -and (-not [string]::IsNullOrWhiteSpace($_.CommandLine)) -and $_.CommandLine.Replace("`"", "").Contains("-w $WriteDir")}
 	}
 
 	function GetDCSRunning {

@@ -83,6 +83,7 @@ Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
 $connector.Timeout = [TimeSpan]::FromSeconds(5)
 $tempArtifacts = @()
+$tempTracks = @()
 $invalidChars = [System.IO.Path]::GetInvalidFileNameChars()
 function Get-SafePath([string]$Path) {
 	$invalidChars | % {
@@ -420,6 +421,7 @@ return dcs_extensions ~= nil
 		New-Item -ItemType Directory -Force -Path $tempTrackDirectory | Out-Null
 		$tempTrackPath = Join-Path -Path $tempTrackDirectory -ChildPath (Get-SafePath -Path ($relativeTestPath.TrimStart("..\")))
 		Copy-Item -LiteralPath ($_.FullName) -Destination $tempTrackPath
+		$tempTracks += $tempTrackPath
 
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 		$config = $null
@@ -932,13 +934,14 @@ return dcs_extensions ~= nil
 			}
 		}
 	}
-	if ($tempTrackPath -and (Test-Path -LiteralPath $tempTrackPath)) {
+	$tempTracks | % {
+		$item = $_
 		try {
-			Remove-Item $tempTrackPath
+			Remove-Item $item
 		} catch {
-			Write-HostAnsi "❌ Failed to remove temp track `"$tempTrackPath`", reason:`n$_" -F Red
+			Write-HostAnsi "❌ Failed to remove temp track `"$item`", reason:`n$_" -F Red
 		}
-	}	
+	}
 	if ($QuitDcsOnFinish) {
 		Write-HostAnsi "Now quitting DCS on finish" 
 		sleep 2

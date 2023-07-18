@@ -448,11 +448,6 @@ return dcs_extensions ~= nil
 		} 
 
 		$testName = $(split-path $_.FullName -leafBase)
-		if ($isTrack) {
-			$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
-		} else {
-			$trackDuration = $null
-		}
 		# Headless client reporting
 		if ($Headless) {
 			# Finish any test suites we were in if they aren't in the new path
@@ -517,22 +512,6 @@ return dcs_extensions ~= nil
 		# Determine if track is a LoadTest
 		$isLoadTest = $_.Name.StartsWith("LoadTest.")
 
-		# Track Description
-		$trackDescription = $null
-		try {
-			$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
-			if ([string]::IsNullOrWhiteSpace($trackDescription)) {
-				throw "Description existed but was empty"
-			}
-			Write-HostAnsi "`t`t✅ $testType Description Retrieved: " -F Green
-			Write-HostAnsi $trackDescription
-		} catch {
-			Write-HostAnsi "`t`t⚠️ Failed to get $testType description: $_" -F Yellow
-		}
-		if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
-			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
-		}
-
 		# Retrieve player aircraft from track
 		$playerAircraftType = $null
 		try {
@@ -549,22 +528,56 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
 		}
 
+		# Skip test if load test failed
+		$skipped = $false
+		if ((-not $isLoadTest) -and ($null -ne $playerAircraftType) -and ($loadableModules[$playerAircraftType] -eq $false)) {
+			$skipped = $true
+		}		
+
+		# Track Description
+		if ($skipped -eq $false) {
+			$trackDescription = $null
+			try {
+				$trackDescription = (."$PSScriptRoot/Scripts/Get-MissionDescription.ps1" -TrackPath $_.FullName)
+				if ([string]::IsNullOrWhiteSpace($trackDescription)) {
+					throw "Description existed but was empty"
+				}
+				Write-HostAnsi "`t`t✅ $testType Description Retrieved: " -F Green
+				Write-HostAnsi $trackDescription
+			} catch {
+				Write-HostAnsi "`t`t⚠️ Failed to get $testType description: $_" -F Yellow
+			}
+			if ($Headless -and -not [string]::IsNullOrWhiteSpace($trackDescription)) {
+				Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='Description' value='$(TeamCitySafeString -Value $trackDescription)']"
+			}
+			
+			# Store track duration
+			if ($isTrack) {
+				$trackDuration = [float](GetTrackDuration -Path (Get-Item $_.FullName))
+			} else {
+				$trackDuration = $null
+			}
+		}
+
 		# Update track
-		if ($UpdateTracks) {
+		if ($UpdateTracks -and ($skipped -eq $false)) {
 			# Update scripts in the mission incase the source scripts updated
 			if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
 			if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 		}
-		$skipped = $false
-		# Skip test if load test failed
-		if ((-not $isLoadTest) -and ($null -ne $playerAircraftType) -and ($loadableModules[$playerAircraftType] -eq $false)){
-			$runCount = $localRerunCount + 1
-			$skipped = $true
+
+		# Ensure DCS is started and ready to go
+		if (-not (GetDCSRunning)) {
+			Write-HostAnsi "`t`t✅ Starting DCS" -F Green
+			$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
+			sleep 10
+		} else { # Fallback if we didn't start the process
+			$dcsPid = (GetDCSRunning).Id
 		}
 		# Track retry loop
-		while (($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
+		while (($skipped -eq $false) -and ($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
 			try {
 				$progressMessage = "Test ($trackProgress/$trackCount)"
 				if ($localRerunCount -gt 1) {
@@ -580,14 +593,7 @@ return dcs_extensions ~= nil
 				}
 				Write-HostAnsi $progressMessage
 
-				# Ensure DCS is started and ready to go
-				if (-not (GetDCSRunning)) {
-					Write-HostAnsi "`t`t✅ Starting DCS" -F Green
-					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
-					sleep 5
-				} else { # Fallback if we didn't start the process
-					$dcsPid = (GetDCSRunning).Id
-				}
+				# Wait for DCS to reach main menu
 				$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
 				if ($started -eq $false) {
 					throw [TimeoutException] "DCS did not load to main menu"
@@ -865,7 +871,7 @@ return dcs_extensions ~= nil
 		}
 		if ($Headless) { Write-HostAnsi "##teamcity[testFinished name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 
-		if ($Headless) {
+		if ($Headless -and ($skipped -eq $false)) {
 			try {
 				# Record tacview artifact
 				if (Test-Path $tacviewDirectory) {

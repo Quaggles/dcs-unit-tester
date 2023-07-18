@@ -715,6 +715,9 @@ return dcs_extensions ~= nil
 					$lastUpdate = [DateTime]::Now
 					$sleepTime = 0.5
 					while ((!$job.Finished) -or ((IsTrackPlaying -Mission:(-not $isTrack)) -ne $false)) {
+						if (-not (GetDCSRunning)) {
+							throw "DCS process ended unexpectedly while running $testType"
+						}
 						$modelTime = [float](GetModelTime)
 						if ($modelTime -gt $lastModelTime) {
 							$lastUpdate = [DateTime]::Now

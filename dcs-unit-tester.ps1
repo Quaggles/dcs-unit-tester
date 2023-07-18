@@ -568,14 +568,6 @@ return dcs_extensions ~= nil
 			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 		}
 
-		# Ensure DCS is started and ready to go
-		if (-not (GetDCSRunning)) {
-			Write-HostAnsi "`t`t✅ Starting DCS" -F Green
-			$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
-			sleep 10
-		} else { # Fallback if we didn't start the process
-			$dcsPid = (GetDCSRunning).Id
-		}
 		# Track retry loop
 		while (($skipped -eq $false) -and ($runCount -le $localRerunCount) -and ($failureCount -le $localRetryLimit)) {
 			try {
@@ -592,6 +584,15 @@ return dcs_extensions ~= nil
 					Write-HostAnsi "##teamcity[progressMessage '$progressMessage']"
 				}
 				Write-HostAnsi $progressMessage
+
+				# Ensure DCS is started and ready to go
+				if (-not (GetDCSRunning)) {
+					Write-HostAnsi "`t`t✅ Starting DCS" -F Green
+					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
+					sleep 10
+				} else { # Fallback if we didn't start the process
+					$dcsPid = (GetDCSRunning).Id
+				}
 
 				# Wait for DCS to reach main menu
 				$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for DCS to reach main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
@@ -826,7 +827,18 @@ return dcs_extensions ~= nil
 					}
 				}
 			}
+			
 			if ($output) { $output.Clear() }
+			
+			try {
+				$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t" -Message "Waiting for DCS to return to main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
+				if ($started -eq $false) {
+					throw [TimeoutException] "DCS did not return to main menu"
+				}
+			} catch {
+				Write-HostAnsi "`t❌ $($_.ToString()), Restarting DCS" -ForegroundColor Red
+				KillDCS
+			}
 		}
 
 		# Export result
@@ -901,16 +913,6 @@ return dcs_extensions ~= nil
 			} catch {
 				Write-HostAnsi "`t`t❌ Failed to record track artifact: $_" -F Red
 			}
-		}
-		
-		try {
-			$started = (Wait-Until -Predicate { OnMenu -eq $true } -CancelIf { -not (GetDCSRunning) } -Prefix "`t" -Message "Waiting for DCS to return to main menu" -Timeout $DCSStartTimeout -NoWaitSpinner:$Headless)
-			if ($started -eq $false) {
-				throw [TimeoutException] "DCS did not return to main menu"
-			}
-		} catch {
-			Write-HostAnsi "`t❌ $($_.ToString()), Restarting DCS" -ForegroundColor Red
-			KillDCS
 		}
 
 		$trackProgress = $trackProgress + 1

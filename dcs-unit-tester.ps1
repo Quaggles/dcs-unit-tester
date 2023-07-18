@@ -441,13 +441,13 @@ return dcs_extensions ~= nil
 		$testType="Track"
 		$isMultiplayer = $false
 		if ($isTrack -eq $false) {
-			$isMultiplayer = $($_.BaseName.EndsWith(".mp"))
+			$isMultiplayer = $($_.BaseName.Contains(".mp"))
 			if ($isMultiplayer -eq $true){
 				$testType="Mission (MP)"
 			} else {
 				$testType="Mission (SP)"
 			}
-		} 
+		}
 
 		$testName = $(split-path $_.FullName -leafBase)
 		# Headless client reporting
@@ -512,7 +512,7 @@ return dcs_extensions ~= nil
 		$localPassMode = SetConfigVar $config $PassMode "PassMode"
 
 		# Determine if track is a LoadTest
-		$isLoadTest = $_.Name.StartsWith("LoadTest.")
+		$isLoadTest = $_.BaseName.Contains(".loadtest")
 
 		# Retrieve player aircraft from track
 		$playerAircraftType = $null

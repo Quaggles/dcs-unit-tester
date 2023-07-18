@@ -397,8 +397,8 @@ return dcs_extensions ~= nil
 	$loadableModules = @{}
 	$trackProgress = 1
 	$trackSuccessCount = 0
-	$stopwatch =  [stopwatch]::StartNew()
-	$globalStopwatch =  [stopwatch]::StartNew()
+	$stopwatch = [stopwatch]::StartNew()
+	$globalStopwatch = [stopwatch]::StartNew()
 
 	# Stack representing the subdirectory we are in, used for reporting correct nested test suites to TeamCity
 	$testSuiteStack = New-Object Collections.Generic.List[string]

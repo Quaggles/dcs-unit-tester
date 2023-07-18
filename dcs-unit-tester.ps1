@@ -449,7 +449,6 @@ return dcs_extensions ~= nil
 			}
 		}
 
-		$testName = $(split-path $_.FullName -leafBase)
 		# Headless client reporting
 		if ($Headless) {
 			# Finish any test suites we were in if they aren't in the new path
@@ -483,6 +482,12 @@ return dcs_extensions ~= nil
 				}
 				$index = $index + 1
 			}
+		}
+
+		$testName = $_.Name
+		# Remove any . suffixes like .loadtest
+		if ($testName -match '^([^.]+)' -and $Matches[1]) {
+			$testName = $Matches[1]
 		}
 
 		# Report Test Start

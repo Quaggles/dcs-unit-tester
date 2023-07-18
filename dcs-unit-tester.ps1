@@ -5,6 +5,8 @@ using namespace System.Text.Json
 param (
 	[string] $GamePath, # Path to the game executable e.g. C:/DCS World/bin/dcs.exe
 	[string[]] $TrackDirectory, # Filter for the tracks
+	[string[]] $Include,
+	[string[]] $Exclude,
 	[switch] $QuitDcsOnFinish,
 	[switch] $InvertAssertion, # Used for testing false negatives, will end the tests after 1 second and fail them if they report true
 	[switch] $UpdateTracks = $true, # Update scripts in the track file with those from MissionScripts/
@@ -386,9 +388,9 @@ return dcs_extensions ~= nil
 	}
 	# Gets all the tracks in the track directory that do not start with a .
 	# Load Test tracks must be run first
-	$loadTestTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -eq ".trk" -and ($_.Name.StartsWith('LoadTest.'))})
+	$loadTestTracks = @(Get-ChildItem -Path $TrackDirectory -Include $Include -Exclude $Exclude -File -Recurse | Where-Object { $_.extension -eq ".trk" -and ($_.BaseName.Contains('.loadtest'))})
 	# Regular tests are run last
-	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -File -Recurse | Where-Object { $_.extension -in ".trk",".miz" -and (-not $_.Name.StartsWith('.')) -and (-not $_.Name.StartsWith('LoadTest.'))})
+	$normalTracks = @(Get-ChildItem -Path $TrackDirectory -Include $Include -Exclude $Exclude -File -Recurse | Where-Object { $_.extension -in ".trk",".miz" -and (-not $_.BaseName.StartsWith('.')) -and (-not $_.BaseName.Contains('.loadtest'))})
 	$tracks = $loadTestTracks + $normalTracks
 	$tracks = $tracks | Select-Object -Unique # Remove duplicates
 	$trackCount = ($tracks | Measure-Object).Count

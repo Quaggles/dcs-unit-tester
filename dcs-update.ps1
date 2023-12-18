@@ -60,34 +60,43 @@ if ($process) {
     sleep 5
 }
 $currentJson = Get-AutoUpdaterJson
-$formedVersionRegex = '([0-9.]*)@([a-z_.]+)'
 Write-Host "Requested DCS version: $Version, Current: $(Get-FormedVersion $currentJson)"
+
+# Remove temp files
+Remove-Item -Path "$DcsPath\_downloads\" -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
+Remove-Item -Path "$DcsPath\_backup.*\" -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
 $attemptNumber = 0
-$attemptLimit = 5
+$attemptLimit = 10
 $correctVersionFound = $true
 if ($Version -eq "latest") {
     Start-Updater "update"
     $currentJson = Get-AutoUpdaterJson
-} elseif ($Version -match $formedVersionRegex) {
+} elseif ($Version -match '([0-9.]*)@([a-z_.]+)') {
     $requestedVersion = $Matches[1]
     $requestedBranch = $Matches[2]
     $correctVersionFound = $false
     do {
-        $attemptNumber = $attemptNumber + 1
-        Write-Host "Attempt $attemptNumber/$attemptLimit to update to $Version"
-        Start-Updater "update","$Version" 
-        $currentJson = Get-AutoUpdaterJson
-        # Check version
-        if (-not ([string]::IsNullOrWhiteSpace($requestedVersion))) {
-            if ($currentJson.version -eq $requestedVersion) {
-                $correctVersionFound = $true
-                break
+        try {
+            $attemptNumber = $attemptNumber + 1
+            Write-Host "Attempt $attemptNumber/$attemptLimit to update to $Version"
+            Start-Updater "update","$Version" 
+            $currentJson = Get-AutoUpdaterJson
+            # Check version
+            if (-not ([string]::IsNullOrWhiteSpace($requestedVersion))) {
+                if ($currentJson.version -eq $requestedVersion) {
+                    $correctVersionFound = $true
+                    break
+                }
+            } else { # Check branch
+                if ($currentJson.branch -eq $requestedBranch) {
+                    $correctVersionFound = $true
+                    break
+                }
             }
-        } else { # Check branch
-            if ($currentJson.branch -eq $requestedBranch) {
-                $correctVersionFound = $true
-                break
-            }
+            throw "Matching version not found"
+        } catch {
+            # Wait a minute before retry
+            sleep 60
         }
     } while ($attemptNumber -lt $attemptLimit)
     if ($correctVersionFound -eq $false) {

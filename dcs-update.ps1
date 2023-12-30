@@ -68,7 +68,6 @@ Write-Host "Requested DCS version: $Version, Current: $(Get-FormedVersion $curre
 Remove-Item -Path "$DcsPath\_downloads\" -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
 Remove-Item -Path "$DcsPath\_backup.*\" -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
 $attemptNumber = 0
-$RetryAttempts = 10
 $correctVersionFound = $true
 if ($Version -eq "latest") {
     Start-Updater "update"

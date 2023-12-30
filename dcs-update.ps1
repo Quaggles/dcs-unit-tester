@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param (
     $DcsPath,
-    $Version = "latest"
+    $Version = "latest",
+    [int] $Timeout = 3600,
+    [int] $RetryAttempts = 10
 )
 $ErrorActionPreference = 'Stop'
 function Get-AutoUpdaterJson() {
@@ -16,7 +18,7 @@ function Start-Updater([String[]] $ArgumentList) {
     Write-Host "Running $updaterPath $($ArgumentList | Join-String -Separator " ")"
     $process = Start-Process $updaterPath -ArgumentList $ArgumentList -PassThru
     $timeouted = $null # reset any previously set timeout
-    $process | Wait-Process -Timeout (60*60) -ErrorAction SilentlyContinue -ErrorVariable timeouted
+    $process | Wait-Process -Timeout $Timeout -ErrorAction SilentlyContinue -ErrorVariable timeouted
     if ($timeouted) {
         Write-Host "Timeout breached, killing updater"
         # terminate the process
@@ -66,7 +68,7 @@ Write-Host "Requested DCS version: $Version, Current: $(Get-FormedVersion $curre
 Remove-Item -Path "$DcsPath\_downloads\" -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
 Remove-Item -Path "$DcsPath\_backup.*\" -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
 $attemptNumber = 0
-$attemptLimit = 10
+$RetryAttempts = 10
 $correctVersionFound = $true
 if ($Version -eq "latest") {
     Start-Updater "update"
@@ -78,7 +80,7 @@ if ($Version -eq "latest") {
     do {
         try {
             $attemptNumber = $attemptNumber + 1
-            Write-Host "Attempt $attemptNumber/$attemptLimit to update to $Version"
+            Write-Host "Attempt $attemptNumber/$RetryAttempts to update to $Version"
             Start-Updater "update","$Version" 
             $currentJson = Get-AutoUpdaterJson
             # Check version
@@ -98,7 +100,7 @@ if ($Version -eq "latest") {
             # Wait a minute before retry
             sleep 60
         }
-    } while ($attemptNumber -lt $attemptLimit)
+    } while ($attemptNumber -lt $RetryAttempts)
     if ($correctVersionFound -eq $false) {
         throw "Could not update to requested version"
     }

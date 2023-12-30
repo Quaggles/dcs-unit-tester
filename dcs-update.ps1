@@ -70,9 +70,15 @@ Remove-Item -Path "$DcsPath\_backup.*\" -Recurse -Force -Confirm:$false -ErrorAc
 $attemptNumber = 0
 $correctVersionFound = $true
 if ($Version -eq "latest") {
+    if ($env:TEAMCITY_VERSION) {
+        Write-Host "##teamcity[progressMessage 'Updating to latest DCS version']"
+    }
     Start-Updater "update"
     $currentJson = Get-AutoUpdaterJson
 } elseif ($Version -match '([0-9.]*)@([a-z_.]+)') {
+    if ($env:TEAMCITY_VERSION) {
+        Write-Host "##teamcity[progressMessage 'Updating to $Version']"
+    }
     $requestedVersion = $Matches[1]
     $requestedBranch = $Matches[2]
     $correctVersionFound = $false

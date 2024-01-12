@@ -800,7 +800,7 @@ return dcs_extensions ~= nil
 				$resultSet = $false
 				$result = $false
 				if ($Headless) { # Record log file as artifact
-    					try {
+					try {
 						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath.log"
 						$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
 						Write-HostAnsi "Recording DCS log as artifact, will copy to $tempLog"
@@ -808,7 +808,7 @@ return dcs_extensions ~= nil
 						$tempArtifacts += $tempLog
 						Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
 						Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
-     					} catch {
+					} catch {
 						Write-HostAnsi "`t`t❌ Failed to record log artifact: $_" -F Red
    					}
 				}
@@ -943,10 +943,22 @@ return dcs_extensions ~= nil
 		Read-Host "Press enter to exit"
 	}
 } finally {
+	if ($QuitDcsOnFinish) {
+		Write-HostAnsi "Now quitting DCS on finish" 
+		sleep 2
+		try {
+			$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
+			sleep 5
+			KillDCS
+		} catch {
+			#Ignore errors
+		}
+	}
 	if ($Headless) {
 		$tempArtifacts | % {
 			$item = $_
 			try {
+				Write-Host "Cleaning up artifact '$_'"
 				Remove-Item $item
 			} catch {
 				Write-HostAnsi "❌ Failed to remove temp artifact `"$item`", reason:`n$_" -F Red
@@ -956,21 +968,11 @@ return dcs_extensions ~= nil
 	$tempTracks | % {
 		$item = $_
 		try {
+			Write-Host "Cleaning up track '$_'"
 			Remove-Item $item
 		} catch {
 			Write-HostAnsi "❌ Failed to remove temp track `"$item`", reason:`n$_" -F Red
 		}
-	}
-	if ($QuitDcsOnFinish) {
-		Write-HostAnsi "Now quitting DCS on finish" 
-		sleep 2
-		try {
-			$connector.SendReceiveCommandAsync("return DCS.exitProcess()").GetAwaiter().GetResult() | out-null
-		} catch {
-			#Ignore errors
-		}
-		sleep 5
-		KillDCS
 	}
 	if ($connector) { $connector.Dispose() }
 }

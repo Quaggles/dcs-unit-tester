@@ -900,6 +900,7 @@ return dcs_extensions ~= nil
 					$tacviewPath = gci "$tacviewDirectory\Tacview-*$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
 					if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
 						Write-HostAnsi "Tacview found for $testName at $tacviewPath"
+						$tempArtifacts += $tacviewPath
 						Write-HostAnsi "##teamcity[publishArtifacts '$tacviewPath']"
 						$artifactPath = split-path $tacviewPath -leaf
 						Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"

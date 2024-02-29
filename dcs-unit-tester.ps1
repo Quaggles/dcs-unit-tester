@@ -874,7 +874,10 @@ return dcs_extensions ~= nil
 
 		if ($skipped) {
 			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped (Aircraft type failed LoadTest), $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
-			if ($Headless) { Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']" }
+			if ($Headless) {
+				Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']"
+				sleep 1
+			}
 		} elseif ($result -eq $TRUE) {
 			Write-HostAnsi "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
 			$trackSuccessCount = $trackSuccessCount + 1

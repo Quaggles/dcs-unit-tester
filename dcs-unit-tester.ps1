@@ -418,24 +418,7 @@ return dcs_extensions ~= nil
 
 		$relativeTestPath = $([Path]::GetRelativePath($pwd, $_.FullName))
 
-		# Create a temporary copy of the track for modification and sending to DCS
-		$tempTrackDirectory = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath "dcs-unit-tester/"
-		New-Item -ItemType Directory -Force -Path $tempTrackDirectory | Out-Null
-		$tempTrackPath = Join-Path -Path $tempTrackDirectory -ChildPath (Get-SafePath -Path ($relativeTestPath.TrimStart("..\")))
-		Copy-Item -LiteralPath ($_.FullName) -Destination $tempTrackPath
-		$tempTracks += $tempTrackPath
-
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
-		$config = $null
-		$configPathTemplate = Join-Path -Path (split-path $_.FullName -Parent) -ChildPath "/.base.json"
-		$configPath = [System.IO.Path]::ChangeExtension($_.FullName, ".json")
-		if (Test-Path -Path $configPath) {
-			Write-HostAnsi "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPath))"
-			$config = ConvertFrom-Json (Get-Content -Path $configPath -Raw)
-		} elseif (Test-Path -Path $configPathTemplate) {
-			Write-HostAnsi "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPathTemplate))"
-			$config = ConvertFrom-Json (Get-Content -Path $configPathTemplate -Raw)
-		}
 
 		$isTrack = $($_.Extension -eq ".trk")
 		$testType="Track"
@@ -453,14 +436,12 @@ return dcs_extensions ~= nil
 		if ($Headless) {
 			# Finish any test suites we were in if they aren't in the new path
 			$index = $testSuiteStack.Count - 1
+			
+			$targetSuitePath = [string]::Join("/", $testSuites)
 
 			$testSuiteStack | Sort-Object -Descending {(++$script:i)} | % { # <= Reverse Loop
-				if ($testSuites.Count -gt $index) {
-					$peek = $testSuites[$index]
-				} else {
-					$peek = $null
-				}
-				if ($peek -ne $_) {
+				$currentSuitePath = [string]::Join("/", $testSuiteStack)
+				if (-not ($targetSuitePath.StartsWith($currentSuitePath))) {
 					$testSuiteStack.RemoveAt($index)
 					Write-HostAnsi "##teamcity[testSuiteFinished name='$_']"
 				}
@@ -510,6 +491,19 @@ return dcs_extensions ~= nil
 				return $OriginalValue
 			}
 		}
+
+		# Load config file if it exists
+		$config = $null
+		$configPathTemplate = Join-Path -Path (split-path $_.FullName -Parent) -ChildPath "/.base.json"
+		$configPath = [System.IO.Path]::ChangeExtension($_.FullName, ".json")
+		if (Test-Path -Path $configPath) {
+			Write-HostAnsi "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPath))"
+			$config = ConvertFrom-Json (Get-Content -Path $configPath -Raw)
+		} elseif (Test-Path -Path $configPathTemplate) {
+			Write-HostAnsi "`tℹ️ Loading Config File: $([Path]::GetRelativePath($pwd, $configPathTemplate))"
+			$config = ConvertFrom-Json (Get-Content -Path $configPathTemplate -Raw)
+		}
+		# Override config values with arguments
 		$localRerunCount = SetConfigVar $config $RerunCount "RerunCount"
 		$localTimeAcceleration = SetConfigVar $config $TimeAcceleration "TimeAcceleration"
 		$localRetryLimit = SetConfigVar $config $RetryLimit "RetryLimit"
@@ -521,25 +515,26 @@ return dcs_extensions ~= nil
 
 		# Retrieve player aircraft from track
 		$playerAircraftType = "Core"
-		try {
-			$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
-			if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
-				throw "Player aircraft type could not be retrieved"
+		if ($loadableModules["Core"] -ne $false) { # Skip checking if a core test failed to save time
+			try {
+				$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
+				if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
+					throw "Player aircraft type could not be retrieved"
+				}
+				Write-HostAnsi "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
+			} catch {
+				Write-HostAnsi "`t`t⚠️ Failed to get player aircraft type: $_" -F Yellow
+				$playerAircraftType = "Core"
 			}
-			Write-HostAnsi "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
-		} catch {
-			Write-HostAnsi "`t`t⚠️ Failed to get player aircraft type: $_" -F Yellow
-			$playerAircraftType = "Core"
-		}
-		if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
-			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
+			if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
+				Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
+			}
 		}
 
 		# Skip test if load test failed
 		$skipped = $false
-		# Skips aircraft load tests if core failed
-		if ($isLoadTest -and $playerAircraftType -ne "Core" -and $loadableModules["Core"] -eq $false) {
-			$loadableModules[$playerAircraftType] = $false
+		# Skip all following tests if core load test failed
+		if ($loadableModules["Core"] -eq $false) {
 			$skipped = $true
 		}
 		# If a test uses an aircraft in a player slot that failed a loadtest skip it
@@ -570,6 +565,16 @@ return dcs_extensions ~= nil
 			} else {
 				$trackDuration = $null
 			}
+		}
+
+		# Create a temporary copy of the track for modification and sending to DCS
+		$tempTrackPath = $null
+		if ($skipped -eq $false) {
+			$tempTrackDirectory = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath "dcs-unit-tester/"
+			New-Item -ItemType Directory -Force -Path $tempTrackDirectory | Out-Null
+			$tempTrackPath = Join-Path -Path $tempTrackDirectory -ChildPath (Get-SafePath -Path ($relativeTestPath.TrimStart("..\")))
+			Copy-Item -LiteralPath ($_.FullName) -Destination $tempTrackPath
+			$tempTracks += $tempTrackPath
 		}
 
 		# Update track
@@ -886,7 +891,6 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped $skippedReason, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
 			if ($Headless) {
 				Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']"
-				sleep 1
 			}
 		} elseif ($result -eq $TRUE) {
 			Write-HostAnsi "`t✅ Test ($trackProgress/$trackCount) Passed, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Green -BackgroundColor Black
@@ -896,7 +900,7 @@ return dcs_extensions ~= nil
 			if ($Headless) { Write-HostAnsi "##teamcity[testFailed name='$testName' duration='$($stopwatch.Elapsed.TotalMilliseconds)']" }
 		}
 		# Record the load test result in a dictionary
-		if ($isLoadTest) {
+		if ($isLoadTest -and $null -ne $playerAircraftType -and $loadableModules[$playerAircraftType] -ne $false) {
 			if ($result -eq $TRUE){
 				Write-HostAnsi "`t✅ Load test for $playerAircraftType set to $result" -ForegroundColor Green
 			} else {
@@ -927,8 +931,15 @@ return dcs_extensions ~= nil
 			try {
 				# If test failed upload the track as an artifact
 				if ($result -eq $false) {
-					Write-HostAnsi "##teamcity[publishArtifacts '$($tempTrackPath)']"
-					$artifactPath = split-path $tempTrackPath -leaf
+					# Handles the track whether it was modified and put in temp folder or straight from TrackDirectory
+					$publishArtifactPath = $null
+					if ($null -eq $tempTrackPath) {
+						$publishArtifactPath = $_.FullName
+					} else {
+						$publishArtifactPath = $tempTrackPath
+					}
+					Write-HostAnsi "##teamcity[publishArtifacts '$($publishArtifactPath)']"
+					$artifactPath = split-path $publishArtifactPath -leaf
 					Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value $artifactPath)']"
 				}
 			} catch {

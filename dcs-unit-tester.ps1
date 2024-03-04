@@ -520,7 +520,7 @@ return dcs_extensions ~= nil
 		$isLoadTest = $_.BaseName.Contains(".loadtest")
 
 		# Retrieve player aircraft from track
-		$playerAircraftType = $null
+		$playerAircraftType = "Core"
 		try {
 			$playerAircraftType = (."$PSScriptRoot/Scripts/Get-PlayerAircraftType.ps1" -TrackPath $_.FullName)
 			if ([string]::IsNullOrWhiteSpace($playerAircraftType) -or ($playerAircraftType -eq "nil")) {
@@ -529,7 +529,7 @@ return dcs_extensions ~= nil
 			Write-HostAnsi "`t`t✅ Player aircraft type Retrieved: $playerAircraftType" -F Green
 		} catch {
 			Write-HostAnsi "`t`t⚠️ Failed to get player aircraft type: $_" -F Yellow
-			$playerAircraftType = $null
+			$playerAircraftType = "Core"
 		}
 		if ($Headless -and -not [string]::IsNullOrWhiteSpace($playerAircraftType)) {
 			Write-HostAnsi "##teamcity[testMetadata testName='$testName' name='PlayerAircraftType' value='$(TeamCitySafeString -Value $playerAircraftType)']"
@@ -537,6 +537,12 @@ return dcs_extensions ~= nil
 
 		# Skip test if load test failed
 		$skipped = $false
+		# Skips aircraft load tests if core failed
+		if ($isLoadTest -and $playerAircraftType -ne "Core" -and $loadableModules["Core"] -eq $false) {
+			$loadableModules[$playerAircraftType] = $false
+			$skipped = $true
+		}
+		# If a test uses an aircraft in a player slot that failed a loadtest skip it
 		if ((-not $isLoadTest) -and ($null -ne $playerAircraftType) -and ($loadableModules[$playerAircraftType] -eq $false)) {
 			$skipped = $true
 		}		
@@ -873,7 +879,11 @@ return dcs_extensions ~= nil
 		}
 
 		if ($skipped) {
-			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped (Aircraft type failed LoadTest), $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
+			$skippedReason = "(Aircraft type failed LoadTest)"
+			if ($loadableModules["Core"] -eq $false) {
+				$skippedReason = "(Core game failed LoadTest)"
+			}
+			Write-HostAnsi "`t➡️ Test ($trackProgress/$trackCount) Skipped $skippedReason, $passMessage after ($($stopwatch.Elapsed.ToString('hh\:mm\:ss')))" -ForegroundColor Blue -BackgroundColor Black
 			if ($Headless) {
 				Write-HostAnsi "##teamcity[testIgnored name='$testName' message='Test ignored as load test did not pass for `"$(TeamCitySafeString -Value $playerAircraftType)`"']"
 				sleep 1

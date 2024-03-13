@@ -86,6 +86,9 @@ if ($Version -eq "latest") {
         try {
             $attemptNumber = $attemptNumber + 1
             Write-Host "Attempt $attemptNumber/$RetryAttempts to update to $Version"
+            if ($env:TEAMCITY_VERSION) {
+                Write-Host "##teamcity[progressMessage 'Updating to $Version, attempt ($attemptNumber/$RetryAttempts)']"
+            }
             Start-Updater "update","$Version" 
             $currentJson = Get-AutoUpdaterJson
             # Check version
@@ -105,8 +108,11 @@ if ($Version -eq "latest") {
             # Wait a minute before retry
             sleep 60
         }
-    } while ($attemptNumber -lt $RetryAttempts)
+    } while ($attemptNumber -lt $RetryAttempts -or $RetryAttempts -lt 0)
     if ($correctVersionFound -eq $false) {
+        if ($env:TEAMCITY_VERSION) {
+            Write-Host "##teamcity[progressMessage 'Updating to version $Version failed after $attemptNumber attempts)']"
+        }
         throw "Could not update to requested version"
     }
 } elseif ($Version -eq "none") {

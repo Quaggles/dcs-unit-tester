@@ -9,15 +9,6 @@ Video overview of PowerShell script:
 
 [![IMAGE ALT TEXT](https://user-images.githubusercontent.com/8382945/193401137-bde808d0-b5de-43f6-b094-60232379179d.png)](http://www.youtube.com/watch?v=NL5GRlY3plM "DCS Unit Tester Overview")
 
-### TeamCity WebGUI
-
-I've set up a TeamCity continuous integration site which allows for easy viewing of test results that have been run on my server it can be accessed at: https://teamcity.home.ryanquagliata.com Tests run on Open Beta branch are viewable publicly by clicking "Log in as guest"
-
-Video overview of WebGUI:
-
-[![IMAGE ALT TEXT](https://user-images.githubusercontent.com/8382945/193400826-ae53bec3-602f-4ec7-a599-c2d7c0282f2b.png)](https://www.youtube.com/watch?v=yAm4zmELh5U "
-DCS Unit Tester WebGUI Overview")
-
 ## What is it?
 
 DCS is a massive game/simulation with hundreds of elements that come together to create a working aircraft, every single change could potentially break a system and doing regression testing for every system on every aircraft for every patch is a massive time investment. 

@@ -98,7 +98,7 @@ Remember the implications of disabling the Safe Scripting Environment:
 
 Because of this I recommend only enabling the mod when testing or developing missions
 
-### 4. Run!
+### 5. Run!
 
 [Powershell 7 is required](https://github.com/PowerShell/PowerShell/releases/latest).
 
@@ -111,7 +111,7 @@ The supported extensions are:
 * <b>.miz</b> - Runs in singleplayer mission file, ends when test returns the assertion (Useful for testing scripting functions and AI)
 * <b>.mp.miz</b> - Runs as a multiplayer server, ends when test returns the assertion (Useful for testing scripting functions and AI)
 
-### 5. Observe
+### 6. Observe
 
 If you want have the game render to watch what it's doing go to `Saved Games\DCS.unittest\Config\autoexec.cfg` and comment out the line like so
 ```lua

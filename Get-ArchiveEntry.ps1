@@ -1,9 +1,9 @@
 [CmdletBinding(SupportsShouldProcess)]
 param (
-    [Parameter()]
+    [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
     [System.IO.FileInfo]
     $Path,
-    [Parameter()]
+    [Parameter(Mandatory = $true)]
     [string]
     $EntryPath
 )
@@ -49,7 +49,8 @@ PROCESS {
                 return $stream.ReadToEnd();
             }
         } else {
-            Write-Host "No entry to read at ""$EntryPath"" in archive ""$Path"""
+            Write-Verbose "No entry to read at ""$EntryPath"" in archive ""$Path"""
+            return $null
         }
     }
 }

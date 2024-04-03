@@ -66,27 +66,29 @@ Set a mission description to explain what your test does and what the success co
 
 ## Setup
 
-### 0. Clone the project into a folder
+### 1. Clone the project into a folder
 
 `git clone https://github.com/Quaggles/dcs-unit-tester.git --recurse-submodules` or download the project zip from [here](https://github.com/Quaggles/dcs-unit-tester/archive/refs/heads/master.zip)
 
-### 1. Configure a DCS profile for the tester
+### 2. Configure a DCS profile for the tester
 
-Put the `[Project Folder]\Saved Games\DCS.unittest` folder in your Saved Games folder next to your `DCS` and `DCS.openbeta` folders, this is a profile with an autoexec.cfg file that will run the tests in DCS without rendering anything and in windowed mode, this allows you to keep it in the background and work on other things.
+Put the `[Project Folder]\Saved Games\DCS.unittest` folder in your Saved Games folder next to your `DCS` and `DCS.openbeta` folders, this is a profile preconfigured for the unit tester, it contains an `options.lua` with the lowest graphics settings, an `autoexec.cfg` that sets the game to windowed and disables sounds and 3D rendering so it can be left in the background and a mod (`DCS-Extensions`) that allows the unit tester to set track time acceleration programatically.
 
-### 2. Get some tests
+Since this is a new DCS profile when the unit tester first launches the game DCS will ask for your login credentials.
+
+### 3. Get some tests
 
 [Follow the guide](https://github.com/Quaggles/dcs-unit-tester#how-to-create-a-test)
 
-I've also created 81 tests for the F/A-18C Hornet which are [available here](https://github.com/Quaggles/dcs-unit-tests), it covers every weapon system available for the aircraft. It also tests where necessary every variant of every weapon when they have different racks, for example there used to be a bug where the AIM-9X on a single rail would work different than when loaded on a double rail, this avoids missing those peculiarities.
+The current test suite used for regression testing is [available here](https://github.com/Quaggles/dcs-unit-tests), they can be used as examples.
 
-### 3. Install the DCS Unit Tester Mod in OVGME
+### 4. Install the DCS Unit Tester Mod in OVGME
 
 [Get OVGME from here and configure it](https://wiki.hoggitworld.com/view/OVGME)
 
 Install the mod from this repository: [DCS Unit Tester Mod - Enable SSE LuaSocket](/DCS%20Unit%20Tester%20Mod%20-%20Enable%20SSE%20LuaSocket.zip)
 
-This mod whitelists the LuaSocket library in the Safe Scripting Environment to allow the mission track to talk over a TCP connection to the powershell script, it previously handled disabling the briefing but that is now handled automatically by the tester script calling `DCS.setPause(false)`
+This mod whitelists the LuaSocket library in the Safe Scripting Environment to allow the mission track to talk over a TCP connection to the powershell script.
 
 It also contains `DCS-LuaConnector-hook.lua` from my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) system which allows the Powershell script to talk to the DCS Lua environment directly and determine if it's waiting on the menu and to tell it to load tracks.
 
@@ -98,9 +100,9 @@ Because of this I recommend only enabling the mod when testing or developing mis
 
 ### 4. Run!
 
-[Powershell 7 is required](https://github.com/PowerShell/PowerShell/releases/latest) since I use my [DCS.Lua.Connector](https://github.com/Quaggles/DCS.Lua.Connector) to talk to DCS and only Powershell 7 and higher can load .net 5.0 libraries
+[Powershell 7 is required](https://github.com/PowerShell/PowerShell/releases/latest).
 
-Run the script like so: `dcs-unit-tester.ps1 -TrackDirectory "C:/Path/To/Directory/Containing/Tracks"`, the script should automatically find your DCS installation through the registry but if you want to use a different one you can use the `-GamePath` argument to provide the path <b>To your DCS.exe specifically</b> don't just point it to the DCS folder
+Run the script in Powershell 7 like so: `dcs-unit-tester.ps1 -TrackDirectory "C:/Path/To/Directory/Containing/Tracks"`, the script should automatically find your DCS installation through the registry but if you want to use a different one you can use the `-GamePath` argument to provide the path <b>to your DCS.exe specifically</b>, don't just point it to the DCS folder
 
 For a full list of parameters read: [PowerShell Parameters](#powershell-parameters)
 
@@ -123,8 +125,10 @@ Once the script has finished you should see a lot of terminal output showing the
 ## PowerShell Parameters
 Parameter Name|Default Value|Description
 --|--|--
-GamePath|`HKCU\SOFTWARE\Eagle Dynamics\DCS World\Path`|Path to the game executable e.g. `C:/DCS World/bin/dcs.exe`, overrides the one found in the registry
+GamePath|`Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World\Path`|Path to the game executable e.g. `C:/DCS World/bin/dcs.exe`, overrides the one found in the registry
 TrackDirectory|Working Directory|Path to the directory containing tracks
+Include||A set of filters for what should be included from `-TrackDirectory`, for example `-Include "*.loadtest.trk"`
+Exclude||A set of filters for what should be excluded from `-TrackDirectory`, for example `-Exclude "*.regression.trk"`
 QuitDcsOnFinish|false|Sets if the tester quits DCS when tests are complete
 UpdateTracks|false|If enabled updates scripts in the track file with those from [MissionScripts/](/MissionScripts/), useful for keeping the networking scripts up to date across hundreds of track files
 Reseed|false|If enabled regenerates the tracks RNG seed, can be used for testing things with randomness like AI decision making or weapon CEP
@@ -138,8 +142,13 @@ RetryLimit|2|How many times a track will be retried after a DCS failure (Crash\F
 RerunCount|1|How many times the track will be run, used in combination with PassMode below
 PassMode|All|Possible values:<br><b>All</b>: All runs of the test must pass for the test to report success<br><b>Majority</b>: Greater than 50% test runs must pass for the test to report success<br><b>Any</b>: At least 1 test run must pass for the test to report success<br><b>Last</b>: The result from the final test run is reported
 PassModeShortCircuit|false|If enabled prevents rerunning a test more times than needed once the PassMode has been satisfied, for example with `PassMode:All` if a single test fails no more are run and the result is reported as failed immediately, helps cut down on test execution time
-TimeAcceleration|1|Sets the time acceleration in each track to reduce runtime, done using AutoHotKey which sends presses of `Ctrl + Z` once the track is playing, set this to a sane number for your hardware, for complex tests above 8x on slow computers can cause track desync. This parameter overrides any time acceleration that was recorded in the track
+TimeAcceleration|1|Sets the time acceleration in each track to reduce runtime, if `DCS-Extensions` mod is installed [(Follow step #2)](#2-configure-a-dcs-profile-for-the-tester) this is done programatically and works with DCS in the background. If the mod is not installed this is done using AutoHotKey which focuses the DCS window then sends presses of `Ctrl + Z`. Set this to a sane number for your hardware, for complex tests above 8x on slow computers can cause track desync. This parameter overrides any time acceleration that was recorded in the track
+SetKeyDelay|0|Delay in ms between keypresses used to set DCS time acceleration when it cannot be set programatically
 InvertAssertion|false|If enabled tests for false negatives (A test reports success if nothing happened), will end the tests after 1 second and fail them if they report true
+WriteDir|DCS.unittest|Write directory to use in Saved Games
+WriteOutput|false|Writes messages output from the track beginning with `DUT_OUTPUT=` to a csv file next to the track, useful for statistics gathering
+WriteOutputSeed|false|If `-WriteOutput` is set appends a column to the CSV with the track's seed
+ClearTacview|false|Removes all files in `~\Documents\Tacview` before tests are run
 
 To override these parameters on a per test basis read: [Local track config files](#local-track-config-files)
 

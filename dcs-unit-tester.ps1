@@ -27,6 +27,7 @@ param (
 	[int] $SetKeyDelay = 0,
 	[string] $WriteDir = "DCS.unittest",
 	[switch] $WriteOutput,
+	[switch] $WriteOutputSeed,
 	[switch] $ClearTacview
 )
 
@@ -792,10 +793,18 @@ return dcs_extensions ~= nil
 						$result = [Boolean]::Parse($Matches[1])
 						$resultSet = $true
 					} elseif ($_ -match '^DUT_OUTPUT=(.+)$'){
-						Write-Output $Matches[1]
+						$outputValue = $Matches[1]
+						Write-Output $outputValue
 						if ($WriteOutput) {
 							$newPath = [System.IO.Path]::ChangeExtension($track.FullName, "csv")
-							Add-Content -Path $newPath -Value $Matches[1] 
+							if ($WriteOutputSeed) {
+								if ($Reseed -and $null -ne $randomSeed) { # if the seed was generated grab it from the stored value
+									$outputValue = $outputValue + ",$randomSeed"									
+								} else { # Otherwise grab from the track file
+									$outputValue = $outputValue + ",$(GetSeed -Path $tempTrackPath.FullName)"
+								}
+							}
+							Add-Content -Path $newPath -Value $outputValue
 						}
 					} 
 					Write-HostAnsi "`t`t    $_"

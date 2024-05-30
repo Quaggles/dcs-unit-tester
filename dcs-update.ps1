@@ -13,12 +13,58 @@ function Get-AutoUpdaterJson() {
   }
   return $autoupdateJson
 }
+function EscapeTeamcity([string] $Message) {
+    $Message = $Message.Replace("|","||");
+    $Message = $Message.Replace("'","|'");
+    $Message = $Message.Replace("`n","|n");
+    $Message = $Message.Replace("`r","|r");
+    $Message = $Message.Replace("[","|[");
+    $Message = $Message.Replace("]","|]");
+    return $Message;
+}
+function Start-ThreadJobHere([scriptblock]$ScriptBlock, [object[]]$ArgumentList) {
+    Start-ThreadJob -Init ([ScriptBlock]::Create("Set-Location '$pwd'")) -Script $ScriptBlock -ArgumentList $ArgumentList -StreamingHost $Host
+}
 function Start-Updater([String[]] $ArgumentList) {
     $ArgumentList += "--quiet"
-    Write-Host "Running $updaterPath $($ArgumentList | Join-String -Separator " ")"
-    $process = Start-Process $updaterPath -ArgumentList $ArgumentList -PassThru
-    $timeouted = $null # reset any previously set timeout
-    $process | Wait-Process -Timeout $Timeout -ErrorAction SilentlyContinue -ErrorVariable timeouted
+    if ($env:TEAMCITY_VERSION) {
+        $logPath = "$env:temp/DCS/autoupdate_templog.txt"
+        # Start a job to monitor the log file once it is created
+        $logMonitorJob = Start-ThreadJobHere -ArgumentList $logPath -ScriptBlock {
+            param([string] $File)
+            ${function:EscapeTeamcity} = ${using:function:EscapeTeamcity}
+            Write-host "##teamcity[compilationStarted compiler='DCS Updater Log']"
+            try {
+                Write-Host "##teamcity[message text='$(EscapeTeamcity -Message "Waiting for $File to exist and be modified")']"
+                $startDate = Get-Date
+                while (-not (Test-Path -LiteralPath $File) -or ((Get-Item -LiteralPath $File).LastWriteTime -lt $startDate)) {
+                    sleep 10
+                }
+                Write-Host "##teamcity[message text='$(EscapeTeamcity -Message "Tailing $File")']"
+                Get-Content $File -Wait | ForEach-Object { Write-Host "##teamcity[message text='$(EscapeTeamcity -Message $_)']" }
+            } catch {
+                Write-Host "Error during log monitoring:`n$_" -F Red
+                throw
+            } finally {
+                Write-Host "##teamcity[compilationFinished compiler='DCS Updater Log']"
+            }
+        }
+    }
+    # Run the update when it finishes force the log monitor to stop
+    try {
+        Write-Host "Running $updaterPath $($ArgumentList | Join-String -Separator " ")"
+        $process = Start-Process $updaterPath -ArgumentList $ArgumentList -PassThru
+        $timeouted = $null # reset any previously set timeout
+        $process | Wait-Process -Timeout $Timeout -ErrorAction SilentlyContinue -ErrorVariable timeouted
+    } finally {
+        if ($logMonitorJob) {
+            # Allow 3 seconds for file to buffer before stopping
+            sleep 3;
+            $logMonitorJob | Stop-Job
+            $logMonitorJob = $null
+        }
+    }
+
     if ($timeouted) {
         Write-Host "Timeout breached, killing updater"
         # terminate the process
@@ -105,6 +151,7 @@ if ($Version -eq "latest") {
             }
             throw "Matching version not found"
         } catch {
+            Write-Host "Attempt $attemptNumber/$RetryAttempts failed, waiting 60 seconds before retry, reason:`n`n$_`n" -F Red
             # Wait a minute before retry
             sleep 60
         }

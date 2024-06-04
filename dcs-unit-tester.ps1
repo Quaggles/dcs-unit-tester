@@ -28,7 +28,8 @@ param (
 	[string] $WriteDir = "DCS.unittest",
 	[switch] $WriteOutput,
 	[switch] $WriteOutputSeed,
-	[switch] $ClearTacview
+	[switch] $ClearTacview,
+	[string[]] $DCSArgs
 )
 
 function Write-HostAnsi {
@@ -88,6 +89,14 @@ $connector.Timeout = [TimeSpan]::FromSeconds(5)
 $tempArtifacts = @()
 $tempTracks = @()
 $invalidChars = [System.IO.Path]::GetInvalidFileNameChars()
+
+if ($null -eq $WriteDir) {
+	$WriteDir = "DCS"
+}
+$mergedDcsArgs = @("-w",$WriteDir)
+if ($DCSArgs) {
+	$mergedDcsArgs = $mergedDcsArgs + $DCSArgs 
+}
 function Get-SafePath([string]$Path) {
 	$invalidChars | % {
 		$Path = $Path.Replace($_, "_")
@@ -382,7 +391,11 @@ return dcs_extensions ~= nil
 	}
 	$tacviewDirectory = "~\Documents\Tacview"
 	$savedGamesDirectory = Get-ItemPropertyValue -Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders" -Name "{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}"
-	$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath $WriteDir
+	if ($WriteDir) {
+		$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath $WriteDir
+	} else {
+		$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath "DCS"
+	}
 	# Clear tacview folder
 	if ($ClearTacview -and $Headless -and (Test-Path $tacviewDirectory)) {
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item
@@ -607,7 +620,7 @@ return dcs_extensions ~= nil
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
 					Write-HostAnsi "`t`t✅ Starting DCS" -F Green
-					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList "-w",$WriteDir -PassThru).Id
+					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList $mergedDcsArgs -PassThru).Id
 					sleep 10
 				} else { # Fallback if we didn't start the process
 					$dcsPid = (GetDCSRunning).Id

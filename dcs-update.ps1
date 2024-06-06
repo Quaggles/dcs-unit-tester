@@ -2,6 +2,7 @@
 param (
     $DcsPath,
     $Version = "latest",
+    [string[]] $Modules,
     [int] $Timeout = 3600,
     [int] $RetryAttempts = 10
 )
@@ -167,5 +168,33 @@ if ($Version -eq "latest") {
     # Ignore
 } else {
     throw "Invalid version requested"
+}
+function Get-MissingModules() {
+    $currentJson = Get-AutoUpdaterJson
+    $missingModules = @()
+    foreach ($module in $Modules) {
+        if (-not $currentJson.modules.Contains("$module")) {
+            $missingModules += $module
+        }
+    }
+    return $missingModules
+}
+if ($null -ne $Modules) {
+    $missingModules = Get-MissingModules
+    if ($missingModules.Length -gt 0) {
+        if ($env:TEAMCITY_VERSION) {
+            Write-Host "##teamcity[progressMessage 'Installing modules: $($missingModules -join ", ")']"
+        }
+        Write-Host "Following modules are not installed: $($missingModules -join ", ")"
+        Start-Updater "install",$($missingModules -join " ")
+        $missingModules = Get-MissingModules
+        if ($missingModules.Length -gt 0) {
+            Write-Host "Following modules failed to be installed: $($missingModules -join ", ")" -F Red
+        } else {
+            Write-Host "Modules successfully installed: $($missingModules -join ", ")" -F Green
+        }
+    } else {
+        Write-Host "All required modules were installed"
+    }
 }
 return $currentJson

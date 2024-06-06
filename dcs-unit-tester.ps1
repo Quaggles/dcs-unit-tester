@@ -619,7 +619,7 @@ return dcs_extensions ~= nil
 
 				# Ensure DCS is started and ready to go
 				if (-not (GetDCSRunning)) {
-					Write-HostAnsi "`t`t✅ Starting DCS" -F Green
+					Write-HostAnsi "`t`t✅ Starting DCS with args: $($mergedDcsArgs -join ' ')" -F Green
 					$dcsPid = (Start-Process -FilePath $GamePath -ArgumentList $mergedDcsArgs -PassThru).Id
 					sleep 10
 				} else { # Fallback if we didn't start the process

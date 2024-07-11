@@ -106,6 +106,7 @@ options = {
 		["f5_nearest_ac"] = true,
 		["force_feedback_enabled"] = true,
 		["headmove"] = false,
+		["launcher"] = false,
 		["show_pilot_body"] = false,
 		["synchronize_controls"] = false,
 	},

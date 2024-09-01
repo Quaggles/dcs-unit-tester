@@ -2,7 +2,8 @@
 param (
     [string]$Source,
     [string]$Destination,
-    [string[]]$SubPaths
+    [string[]]$SubPaths,
+    [string[]]$Include
 )
 $ErrorActionPreference = 'Stop'
 foreach ($item in $SubPaths) {    
@@ -16,5 +17,5 @@ foreach ($item in $SubPaths) {
         Write-Host "Source folder '$destinationFullName' does not exist. Creating it..."        
         New-Item -Path $destinationFullName -ItemType Directory -Force | Out-Null
     }
-    .$PSScriptRoot/Copy-Directory.ps1 -Source $sourceFullName -Destination $destinationFullName
+    .$PSScriptRoot/Copy-Directory.ps1 -Source $sourceFullName -Destination $destinationFullName -Include $Include
 }

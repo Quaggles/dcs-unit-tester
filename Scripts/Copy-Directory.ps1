@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param (
     [string]$Source,
-    [string]$Destination
+    [string]$Destination,
+    [string[]]$Include
 )
 $ErrorActionPreference = 'Stop'
 
@@ -18,7 +19,7 @@ if (!(Test-Path $Destination -PathType Container)) {
 $Destination = (Get-Item $Destination).FullName
 
 # Get all files and directories in the source folder
-$sourceItems = Get-ChildItem $Source -Recurse
+$sourceItems = Get-ChildItem $Source -Recurse -Include $Include
 
 # Loop through each item
 foreach ($item in $sourceItems) {

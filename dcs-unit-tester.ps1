@@ -29,7 +29,7 @@ param (
 	[switch] $WriteOutput,
 	[switch] $WriteOutputSeed,
 	[switch] $ClearTacview,
-	[string[]] $DCSArgs
+	[string[]] $DCSArgs = "--no-launcher"
 )
 
 function Write-HostAnsi {

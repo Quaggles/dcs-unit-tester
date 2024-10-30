@@ -27,6 +27,11 @@ foreach ($item in $sourceItems) {
     $destinationPath = $item.FullName -replace [regex]::Escape($Source), $Destination
     # If item is a file, copy it to the destination folder
     if ($item.PSIsContainer -eq $false) {        
+        $containingFolder = $item.Directory -replace [regex]::Escape($Source), $Destination
+        if (-not (Test-Path -LiteralPath $containingFolder -PathType Container)) {
+            Write-Verbose  "Creating missing parent directory structure: $containingFolder"
+            New-Item -Path $containingFolder -ItemType Directory
+        }
         # Copy file
         Write-Verbose "Copying file '$destinationPath'"
         Copy-Item -Path $item.FullName -Destination $destinationPath -Force

@@ -414,10 +414,12 @@ return dcs_extensions ~= nil
 	}
 	# Clear tacview folder
 	if ($ClearTacview -and (Test-Path $tacviewDirectory -PathType Container)) {
+		Write-Host "Clearing Tacview Files from: '$tacviewDirectory'"
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item -Verbose
 	}
 	# Clear frame Stats folder
 	if ($ClearFrameStats -and (Test-Path "$writeDirFull/Logs" -PathType Container)) {
+		Write-Host "Clearing DCS Frame Stats files from: '$writeDirFull/Logs'"
 		Get-ChildItem -Path "$writeDirFull/Logs/stat-mt-*.csv" | Remove-Item -Verbose
 	}
 	# Gets all the tracks in the track directory that do not start with a .

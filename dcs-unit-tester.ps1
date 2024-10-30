@@ -691,6 +691,20 @@ return dcs_extensions ~= nil
 					if (-not (Wait-Until -Predicate {$task.AsyncWaitHandle.WaitOne(100) -eq $true} -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for TCP Connection" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
 						throw [TimeoutException] "$testType did not establish a TCP Connection"
 					}
+					if ($isBenchmark -and $presentMonPath) {
+						sleep 5 # Wait 5 seconds on the briefing screen for things to stabilise
+						$presentMonSessionName = Get-SafePath $relativeTestPath
+						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-PresentMon.csv"
+						$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+						Write-Host "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
+						$presentMonPid = (Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru).Id
+						$presentMonDataReady = Wait-Until -Predicate {Test-Path $presentMonOutputPath -PathType Leaf} -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for PresentMon initial data" -Timeout 10 -NoWaitSpinner:$Headless
+						if (-not $presentMonDataReady) {
+							throw "PresentMon did not start create output file at: '$presentMonOutputPath'"
+						} else {
+							$tempArtifacts += $presentMonOutputPath
+						}
+					}
 					$trackStartedPredicate = { ((IsTrackPlaying -Mission:(-not $isTrack)) -eq $true) }
 					if (-not (Wait-Until -Predicate $trackStartedPredicate -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for $testType to load" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
 						throw [TimeoutException] "$testType did not finish loading"
@@ -703,14 +717,6 @@ return dcs_extensions ~= nil
 						if (-not (Wait-Until -Predicate $trackUnpausedPredicate -CancelIf { -not (GetDCSRunning) } -RunEach { SetPause -Paused $false } -Prefix "`t`t" -Message "Waiting for $testType to play" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
 							throw [TimeoutException] "$testType did not play"
 						}
-					}
-					if ($isBenchmark -and $presentMonPath) {
-						$presentMonSessionName = Get-SafePath $relativeTestPath
-						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-PresentMon.csv"
-						$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
-						Write-Host "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
-						$presentMonPid = (Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru).Id
-						$tempArtifacts += $presentMonOutputPath
 					}
 					$data = $task.GetAwaiter().GetResult()
 					$stream = $data.GetStream() 

@@ -829,9 +829,7 @@ return dcs_extensions ~= nil
 					$output.Add("Skipped test as aircraft load test failed")
 					$output.Add("DUT_ASSERSION=false")
 				} finally {
-					if ($isBenchmark -and $presentMonPath) {
-						#$presentMonSessionName = Get-SavePath $relativeTestPath
-						#$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+					if ($null -ne $presentMonPid) {
 						Write-Host "Stopping PresentMon session: '$presentMonSessionName'"
 						Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--terminate_existing_session","--session_name","$presentMonSessionName"
 					}

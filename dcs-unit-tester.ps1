@@ -30,7 +30,8 @@ param (
 	[switch] $WriteOutputSeed,
 	[switch] $ClearTacview,
 	[string[]] $DCSArgs = "--no-launcher",
-	[string]$PresentMonPath
+	[string]$PresentMonPath,
+	[switch] $ClearFrameStats
 )
 
 function Write-HostAnsi {
@@ -412,8 +413,12 @@ return dcs_extensions ~= nil
 		$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath "DCS"
 	}
 	# Clear tacview folder
-	if ($ClearTacview -and $Headless -and (Test-Path $tacviewDirectory)) {
-		Get-ChildItem -Path $tacviewDirectory | Remove-Item
+	if ($ClearTacview -and (Test-Path $tacviewDirectory -PathType Container)) {
+		Get-ChildItem -Path $tacviewDirectory | Remove-Item -Verbose
+	}
+	# Clear frame Stats folder
+	if ($ClearFrameStats -and (Test-Path "$writeDirFull/Logs" -PathType Container)) {
+		Get-ChildItem -Path "$writeDirFull/Logs/stat-mt-*.csv" | Remove-Item -Verbose
 	}
 	# Gets all the tracks in the track directory that do not start with a .
 	# Load Test tracks must be run first
@@ -599,10 +604,12 @@ return dcs_extensions ~= nil
 
 		# Create a temporary copy of the track for modification and sending to DCS
 		$tempTrackPath = $null
+		$tempTrackName = $null
 		if ($skipped -eq $false) {
 			$tempTrackDirectory = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath "dcs-unit-tester/"
 			New-Item -ItemType Directory -Force -Path $tempTrackDirectory | Out-Null
-			$tempTrackPath = Join-Path -Path $tempTrackDirectory -ChildPath (Get-SafePath -Path ($relativeTestPath.TrimStart("..\")))
+			$tempTrackName = (Get-SafePath -Path ($relativeTestPath.TrimStart("..\")))
+			$tempTrackPath = Join-Path -Path $tempTrackDirectory -ChildPath $tempTrackName
 			Copy-Item -LiteralPath ($_.FullName) -Destination $tempTrackPath
 			$tempTracks += $tempTrackPath
 		}
@@ -628,6 +635,7 @@ return dcs_extensions ~= nil
 					$progressMessage += ", failed attempts ($failureCount/$localRetryLimit)"
 				}
 				$presentMonOutputPath = $null
+				$presentMonPid = $null
 				# Progress report
 				if ($Headless) {
 					Write-HostAnsi "##teamcity[progressMessage '$progressMessage']"
@@ -701,7 +709,7 @@ return dcs_extensions ~= nil
 						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-PresentMon.csv"
 						$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
 						Write-Host "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
-						Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName"
+						$presentMonPid = (Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru).Id
 						$tempArtifacts += $presentMonOutputPath
 					}
 					$data = $task.GetAwaiter().GetResult()
@@ -860,15 +868,38 @@ return dcs_extensions ~= nil
 					throw "$testType did not send an assertion result, maybe crash?, assuming failed"
 				}
 				if ($Headless -and $isBenchmark) {
+					$statsName = [System.IO.Path]::GetFileNameWithoutExtension($tempTrackName)
+					$stats = Get-Item "$writeDirFull/Logs/stat-mt-*$statsName*.csv"
+					if ($stats) {
+						Write-Host "Found DCS Frame Stats at $stats"
+						try {
+							$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-DCS-Stats.csv"
+							$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+							Write-HostAnsi "Recording DCS Frame Stats as artifact, will copy to $tempLog"
+							Copy-Item -LiteralPath $stats -Destination $tempLog
+							$tempArtifacts += $tempLog
+							Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
+							Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
+							# Remove the original so subsequent runs don't pick it up
+							Remove-Item $stats
+						} catch {
+							Write-HostAnsi "`t`t❌ Failed to record DCS Frame Stats artifact: $_" -F Red
+						}
+					} else {
+						Write-Host "Could not find DCS Frame Stats for $statsName"
+					}
 					if (Test-Path $presentMonOutputPath -PathType Leaf) {
+						# Waits for presentmon to finish so the csv file isn't locked
+						(Wait-Until -Predicate { $null -eq (Get-Process -Id $presentMonPid -ErrorAction SilentlyContinue) } -Prefix "`t`t" -Message "Waiting for PresentMon to finish" -Timeout 10 -NoWaitSpinner:$Headless) | Out-Null
+						sleep 1
 						try {
 							Write-HostAnsi "Recording PresentMon data as artifact: '$presentMonOutputPath'"
 							Write-HostAnsi "##teamcity[publishArtifacts '$presentMonOutputPath']"
 							Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $presentMonOutputPath -Leaf))']"
 						} catch {
-							Write-HostAnsi "`t`t❌ Failed to record benchmark artifact: $_" -F Red
+							Write-HostAnsi "`t`t❌ Failed to record PresentMon artifact: $_" -F Red
 						}
-					}	
+					}
 				}
 				$runCount = $runCount + 1
 			} catch {

@@ -29,7 +29,8 @@ param (
 	[switch] $WriteOutput,
 	[switch] $WriteOutputSeed,
 	[switch] $ClearTacview,
-	[string[]] $DCSArgs = "--no-launcher"
+	[string[]] $DCSArgs = "--no-launcher",
+	[string]$PresentMonPath
 )
 
 function Write-HostAnsi {
@@ -390,6 +391,20 @@ return dcs_extensions ~= nil
 		return ($Host.UI.RawUI.WindowSize.Width - $textLen)
 	}
 	$tacviewDirectory = "~\Documents\Tacview"
+	$presentMonPath = $null
+	if (-not [string]::IsNullOrEmpty($PresentMonPath)) {
+		if (Test-Path -LiteralPath $PresentMonPath -PathType Leaf) {
+			$presentMonPath = $PresentMonPath
+		}
+	} else {
+		$presentMonDirectory = Get-ItemPropertyValue -Path "Registry::HKEY_CURRENT_USER\Software\INTEL\PresentMon" -Name "PresentMonInstallFolder" -ErrorAction SilentlyContinue
+		$presentMonPath = Get-Item "$presentMonDirectory/PresentMonConsoleApplication/PresentMon-*.exe"
+		if (Test-Path -LiteralPath $presentMonPath -PathType Leaf) {
+			Write-HostAnsi "PresentMon path found from registry at '$presentMonPath'" -F Yellow
+		} else {
+			$presentMonPath = $null
+		}
+	}
 	$savedGamesDirectory = Get-ItemPropertyValue -Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders" -Name "{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}"
 	if ($WriteDir) {
 		$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath $WriteDir
@@ -435,6 +450,7 @@ return dcs_extensions ~= nil
 		$testSuites = (Split-Path $relativeTestPath -Parent) -split "\\" -split "/"
 
 		$isTrack = $($_.Extension -eq ".trk")
+		$isBenchmark = $($_.BaseName.Contains(".benchmark"))
 		$testType="Track"
 		$isMultiplayer = $false
 		if ($isTrack -eq $false) {
@@ -611,6 +627,7 @@ return dcs_extensions ~= nil
 				if ($localRetryLimit -gt 0 -and $failureCount -gt 0) {
 					$progressMessage += ", failed attempts ($failureCount/$localRetryLimit)"
 				}
+				$presentMonOutputPath = $null
 				# Progress report
 				if ($Headless) {
 					Write-HostAnsi "##teamcity[progressMessage '$progressMessage']"
@@ -678,6 +695,14 @@ return dcs_extensions ~= nil
 						if (-not (Wait-Until -Predicate $trackUnpausedPredicate -CancelIf { -not (GetDCSRunning) } -RunEach { SetPause -Paused $false } -Prefix "`t`t" -Message "Waiting for $testType to play" -Timeout $TrackLoadTimeout -NoWaitSpinner:$Headless)) {
 							throw [TimeoutException] "$testType did not play"
 						}
+					}
+					if ($isBenchmark -and $presentMonPath) {
+						$presentMonSessionName = Get-SafePath $relativeTestPath
+						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-PresentMon.csv"
+						$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+						Write-Host "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
+						Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName"
+						$tempArtifacts += $presentMonOutputPath
 					}
 					$data = $task.GetAwaiter().GetResult()
 					$stream = $data.GetStream() 
@@ -790,6 +815,12 @@ return dcs_extensions ~= nil
 					$output.Add("Skipped test as aircraft load test failed")
 					$output.Add("DUT_ASSERSION=false")
 				} finally {
+					if ($isBenchmark -and $presentMonPath) {
+						#$presentMonSessionName = Get-SavePath $relativeTestPath
+						#$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
+						Write-Host "Stopping PresentMon session: '$presentMonSessionName'"
+						Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--terminate_existing_session","--session_name","$presentMonSessionName"
+					}
 					# Close TCP connection and stop listening
 					if ($stream) { $stream.close() }
 					if ($listener) { $listener.stop() }
@@ -827,6 +858,17 @@ return dcs_extensions ~= nil
 				}
 				if ($resultSet -eq $false) {
 					throw "$testType did not send an assertion result, maybe crash?, assuming failed"
+				}
+				if ($Headless -and $isBenchmark) {
+					if (Test-Path $presentMonOutputPath -PathType Leaf) {
+						try {
+							Write-HostAnsi "Recording PresentMon data as artifact: '$presentMonOutputPath'"
+							Write-HostAnsi "##teamcity[publishArtifacts '$presentMonOutputPath']"
+							Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $presentMonOutputPath -Leaf))']"
+						} catch {
+							Write-HostAnsi "`t`t❌ Failed to record benchmark artifact: $_" -F Red
+						}
+					}	
 				}
 				$runCount = $runCount + 1
 			} catch {

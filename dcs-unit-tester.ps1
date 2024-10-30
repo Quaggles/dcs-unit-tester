@@ -414,12 +414,12 @@ return dcs_extensions ~= nil
 	}
 	# Clear tacview folder
 	if ($ClearTacview -and (Test-Path $tacviewDirectory -PathType Container)) {
-		Write-Host "Clearing Tacview Files from: '$tacviewDirectory'"
+		Write-HostAnsi "Clearing Tacview Files from: '$tacviewDirectory'"
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item -Verbose
 	}
 	# Clear frame Stats folder
 	if ($ClearFrameStats -and (Test-Path "$writeDirFull/Logs" -PathType Container)) {
-		Write-Host "Clearing DCS Frame Stats files from: '$writeDirFull/Logs'"
+		Write-HostAnsi "Clearing DCS Frame Stats files from: '$writeDirFull/Logs'"
 		Get-ChildItem -Path "$writeDirFull/Logs/stat-mt-*.csv" | Remove-Item -Verbose
 	}
 	# Gets all the tracks in the track directory that do not start with a .
@@ -637,7 +637,7 @@ return dcs_extensions ~= nil
 					$progressMessage += ", failed attempts ($failureCount/$localRetryLimit)"
 				}
 				$presentMonOutputPath = $null
-				$presentMonPid = $null
+				$presentMonProcess = $null
 				# Progress report
 				if ($Headless) {
 					Write-HostAnsi "##teamcity[progressMessage '$progressMessage']"
@@ -698,11 +698,11 @@ return dcs_extensions ~= nil
 						$presentMonSessionName = Get-SafePath $relativeTestPath
 						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-PresentMon.csv"
 						$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
-						Write-Host "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
-						$presentMonPid = (Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru).Id
+						Write-HostAnsi "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
+						$presentMonProcess = Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru -NoNewWindow
 						$presentMonDataReady = Wait-Until -Predicate {Test-Path $presentMonOutputPath -PathType Leaf} -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for PresentMon initial data" -Timeout 10 -NoWaitSpinner:$Headless
 						if (-not $presentMonDataReady) {
-							throw "PresentMon did not start create output file at: '$presentMonOutputPath'"
+							Write-HostAnsi "PresentMon did not start create output file at: '$presentMonOutputPath'" -F Red
 						} else {
 							$tempArtifacts += $presentMonOutputPath
 						}
@@ -831,8 +831,8 @@ return dcs_extensions ~= nil
 					$output.Add("Skipped test as aircraft load test failed")
 					$output.Add("DUT_ASSERSION=false")
 				} finally {
-					if ($null -ne $presentMonPid) {
-						Write-Host "Stopping PresentMon session: '$presentMonSessionName'"
+					if ($null -ne $presentMonProcess) {
+						Write-HostAnsi "Stopping PresentMon session: '$presentMonSessionName'"
 						Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--terminate_existing_session","--session_name","$presentMonSessionName"
 					}
 					# Close TCP connection and stop listening
@@ -877,7 +877,7 @@ return dcs_extensions ~= nil
 					$statsName = [System.IO.Path]::GetFileNameWithoutExtension($tempTrackName)
 					$stats = Get-Item "$writeDirFull/Logs/stat-mt-*$statsName*.csv"
 					if ($stats) {
-						Write-Host "Found DCS Frame Stats at $stats"
+						Write-HostAnsi "Found DCS Frame Stats at $stats"
 						try {
 							$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-DCS-Stats.csv"
 							$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
@@ -892,11 +892,11 @@ return dcs_extensions ~= nil
 							Write-HostAnsi "`t`t❌ Failed to record DCS Frame Stats artifact: $_" -F Red
 						}
 					} else {
-						Write-Host "Could not find DCS Frame Stats for $statsName"
+						Write-HostAnsi "Could not find DCS Frame Stats for $statsName"
 					}
 					if (Test-Path $presentMonOutputPath -PathType Leaf) {
 						# Waits for presentmon to finish so the csv file isn't locked
-						(Wait-Until -Predicate { $null -eq (Get-Process -Id $presentMonPid -ErrorAction SilentlyContinue) } -Prefix "`t`t" -Message "Waiting for PresentMon to finish" -Timeout 10 -NoWaitSpinner:$Headless) | Out-Null
+						(Wait-Until -Predicate { $null -eq (Get-Process -Id ($presentMonProcess.Id) -ErrorAction SilentlyContinue) } -Prefix "`t`t" -Message "Waiting for PresentMon to finish" -Timeout 10 -NoWaitSpinner:$Headless) | Out-Null
 						sleep 1
 						try {
 							Write-HostAnsi "Recording PresentMon data as artifact: '$presentMonOutputPath'"
@@ -1083,7 +1083,7 @@ return dcs_extensions ~= nil
 		$tempArtifacts | % {
 			$item = $_
 			try {
-				Write-Host "Cleaning up artifact '$_'"
+				Write-HostAnsi "Cleaning up artifact '$_'"
 				Remove-Item $item
 			} catch {
 				Write-HostAnsi "❌ Failed to remove temp artifact `"$item`", reason:`n$_" -F Red
@@ -1093,7 +1093,7 @@ return dcs_extensions ~= nil
 	$tempTracks | % {
 		$item = $_
 		try {
-			Write-Host "Cleaning up track '$_'"
+			Write-HostAnsi "Cleaning up track '$_'"
 			Remove-Item $item
 		} catch {
 			Write-HostAnsi "❌ Failed to remove temp track `"$item`", reason:`n$_" -F Red

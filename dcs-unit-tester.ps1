@@ -699,7 +699,7 @@ return dcs_extensions ~= nil
 						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath-PresentMon.csv"
 						$presentMonOutputPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
 						Write-HostAnsi "Starting PresentMon session: '$presentMonSessionName', output at: '$presentMonOutputPath'"
-						$presentMonProcess = Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru -NoNewWindow
+						$presentMonProcess = Start-Process -FilePath $presentMonPath -ArgumentList "--process_id","$dcsPid","--output_file","$presentMonOutputPath","--session_name","$presentMonSessionName" -PassThru -NoNewWindow:$Headless
 						$presentMonDataReady = Wait-Until -Predicate {Test-Path $presentMonOutputPath -PathType Leaf} -CancelIf { -not (GetDCSRunning) } -Prefix "`t`t" -Message "Waiting for PresentMon initial data" -Timeout 10 -NoWaitSpinner:$Headless
 						if (-not $presentMonDataReady) {
 							Write-HostAnsi "PresentMon did not start create output file at: '$presentMonOutputPath'" -F Red

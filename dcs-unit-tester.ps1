@@ -1,7 +1,3 @@
-using namespace System
-using namespace System.IO
-using namespace System.Diagnostics
-using namespace System.Text.Json
 param (
 	[string] $GamePath, # Path to the game executable e.g. C:/DCS World/bin/dcs.exe
 	[string[]] $TrackDirectory, # Filter for the tracks
@@ -33,6 +29,11 @@ param (
 	[string]$PresentMonPath,
 	[switch] $ClearFrameStats
 )
+using namespace System
+using namespace System.IO
+using namespace System.Diagnostics
+using namespace System.Text.Json
+$ErrorActionPreference = "Stop"
 
 function Write-HostAnsi {
 	[CmdletBinding()]
@@ -84,7 +85,6 @@ function Write-HostAnsi {
 
 class SkipTestException : Exception { }
 
-$ErrorActionPreference = "Stop"
 Add-Type -Path "$PSScriptRoot\DCS.Lua.Connector.dll"
 $connector = New-Object -TypeName DCS.Lua.Connector.LuaConnector -ArgumentList "127.0.0.1","5000"
 $connector.Timeout = [TimeSpan]::FromSeconds(5)

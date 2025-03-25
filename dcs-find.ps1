@@ -4,8 +4,12 @@ param(
 )
 $ErrorActionPreference = "Stop"
 try {
-    $regPath = "Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World"
-    $dcsPath = Get-ItemPropertyValue -Path $regPath -Name path
+    if (![string]::IsNullOrWhiteSpace($env:DCS_PATH)) {
+        $dcsPath = $env:DUT_DCS_Path
+    } else {
+        $regPath = "Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World"
+        $dcsPath = Get-ItemPropertyValue -Path $regPath -Name path
+    }
     if ($GetExecutable) {
         $dcsPath = Join-Path $dcsPath $ExecutableSubpath
     }

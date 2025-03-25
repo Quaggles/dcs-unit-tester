@@ -4,7 +4,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 try {
-    if (![string]::IsNullOrWhiteSpace($env:DCS_PATH)) {
+    if (![string]::IsNullOrWhiteSpace($env:DUT_DCS_Path)) {
         $dcsPath = $env:DUT_DCS_Path
     } else {
         $regPath = "Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World"

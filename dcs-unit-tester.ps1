@@ -496,6 +496,13 @@ return dcs_extensions ~= nil
 		$failureCount = 0
 		$successCount = 0
 
+		if ($track.Length -lt 1024) { # Possible this is an lfs pointer, check it to prevent confusing errors
+			$header = Get-Content -LiteralPath $track | select -First 1
+			if ($header.StartsWith("version https://git-lfs.github.com/spec/")){
+				throw "The file '$track' is a Git LFS pointer and not a track, it's likely you did not clone the repository with git lfs initialised"
+			}
+		}
+
 		function SetConfigVar([PSCustomObject] $Config, $OriginalValue, [string] $VariableName) {
 			if (-not $Config.PSObject.Properties) { return $OriginalValue }
 			$prop = $Config.PSObject.Properties[$VariableName]
@@ -813,7 +820,7 @@ return dcs_extensions ~= nil
 							$newPath = [System.IO.Path]::ChangeExtension($track.FullName, "csv")
 							if ($WriteOutputSeed) {
 								if ($Reseed -and $null -ne $randomSeed) { # if the seed was generated grab it from the stored value
-									$outputValue = $outputValue + ",$randomSeed"									
+									$outputValue = $outputValue + ",$randomSeed"
 								} else { # Otherwise grab from the track file
 									$outputValue = $outputValue + ",$(GetSeed -Path $tempTrackPath.FullName)"
 								}

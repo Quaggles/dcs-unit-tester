@@ -397,6 +397,7 @@ return dcs_extensions ~= nil
 	} else {
 		$writeDirFull = Join-Path -Path $savedGamesDirectory -ChildPath "DCS"
 	}
+	$logPath = Join-Path -Path $writeDirFull -ChildPath "Logs/dcs.log"
 	# Clear tacview folder
 	if ($ClearTacview -and $Headless -and (Test-Path $tacviewDirectory)) {
 		Get-ChildItem -Path $tacviewDirectory | Remove-Item
@@ -845,7 +846,7 @@ return dcs_extensions ~= nil
 						$childPath = Get-SafePath -Path "DUT-Run-$runCount-Retry-$failureCount-$relativeTestPath.log"
 						$tempLog = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath $childPath
 						Write-HostAnsi "Recording DCS log as artifact, will copy to $tempLog"
-						Copy-Item -LiteralPath (Join-Path -Path $writeDirFull -ChildPath "Logs/dcs.log") -Destination $tempLog
+						Copy-Item -LiteralPath ($logPath) -Destination $tempLog
 						$tempArtifacts += $tempLog
 						Write-HostAnsi "##teamcity[publishArtifacts '$tempLog']"
 						Write-HostAnsi "##teamcity[testMetadata testName='$testName' type='artifact' value='$(TeamCitySafeString -Value (Split-Path $tempLog -Leaf))']"
@@ -944,8 +945,17 @@ return dcs_extensions ~= nil
 			try {
 				# Record tacview artifact
 				if (Test-Path $tacviewDirectory) {
-					$tacviewPath = gci "$tacviewDirectory\Tacview-*$testName*.acmi" | sort -Descending LastWriteTime | Select -First 1
-					if (-not [string]::IsNullOrWhiteSpace($tacviewPath)) {
+					$tacviewPath = $null
+
+					# Read the log file to find the last saved tacview file
+					$logLines = Get-Content $logPath
+					for ($i = $logLines.Length - 1; $i -ge 0; $i--) {
+						if ($logLines[$i] -match 'Successfully saved \[(.+.acmi)\]') {
+							$tacviewPath = $Matches[1]
+							break
+						}
+					}
+					if ($null -ne $tacviewPath) {
 						Write-HostAnsi "Tacview found for $testName at $tacviewPath"
 						$tempArtifacts += $tacviewPath
 						Write-HostAnsi "##teamcity[publishArtifacts '$tacviewPath']"

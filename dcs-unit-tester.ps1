@@ -119,7 +119,7 @@ try {
 		Write-HostAnsi "`tDCS path not found in registry" -ForegroundColor Red -BackgroundColor Black
 		exit 1
 	}
-	$env:DUT_DCS_Path = (Get-Item $GamePath).Directory
+	$env:DUT_DCS_Path = (Get-Item $GamePath).Directory.Parent
 
 	if (-Not $TrackDirectory) {
 		choice /c yn /m "Search for tracks in current directory ($PWD)?"

@@ -1,7 +1,7 @@
 # DCS Unit Tester
 
 ## Summary
-A powershell script that handles opening DCS and automatically running through unit test tracks, at the end of each track an assersion is evaluated and sent back to the powershell script which marks it as a success of failure.
+A powershell script that handles opening DCS and automatically running through unit test tracks, at the end of each track an assertion is evaluated and sent back to the powershell script which marks it as a success of failure.
 
 ![image](https://user-images.githubusercontent.com/8382945/113413719-a0949380-93fe-11eb-9859-a739065cb44a.png)
 
@@ -23,7 +23,7 @@ Now the track can be replayed whenever a new patch is released and report as a f
 
 The system can only test against things that exist in the mission lua environment, it cannot for example tell you if something looks visually wrong in the aircraft, tests need to be structured so they result in a quantifiable result that can be measured.
 
-For example you could test waypoint entry and coupled autopilot modes by configuring everything and then having a an assertion that the aircraft has to fly within a 500m zone around the waypoint before a time expires. You cannot test things like "Is the CCIP reticule accurate" because by replaying the player actions even if the reticule was broken they would fly the aircraft to the same positon every time.
+For example, you could test waypoint entry and coupled autopilot modes by configuring everything and then having an assertion that the aircraft has to fly within a 500m zone around the waypoint before a time expires. You cannot test things like "Is the CCIP reticule accurate" because by replaying the player actions even if the reticule was broken they would fly the aircraft to the same position every time.
 
 ## How to create a test (Quick)
 
@@ -35,12 +35,12 @@ When creating tests remove as many variables from each test as possible and make
 
 * Have a trigger to set the player aircraft to active pause instantly, this prevents flight model changes from effecting the outcome of the test
 * Enemy target aircraft has Task = 'nothing', Reaction to Threat = 'No Reaction', Chaff - Flare Using = 'Never Use'. This means they fly the same path every time and the minimum amount of randomness is introduced.
-* Since I'm testing whether the Hornet radar works to guide the AMRAAM onto the target I make sure the target aircraft is not infront of the Hornet since if LTWS failed the missile would be fired in visual mode and might find the target without the Hornet's radar
+* Since I'm testing whether the Hornet radar works to guide the AMRAAM onto the target I make sure the target aircraft is not in front of the Hornet since if LTWS failed the missile would be fired in visual mode and might find the target without the Hornet's radar
 * To mark the target as L&S I use the undesignate button (Makes highest priority target L&S) instead of slewing to the target and pressing TDC depress, this means that if ED changes the slew rate or the scale of the radar display it won't break the test
 
-These are the types of considerations you should make when creating your tests if you want them to work across versions and be as consistent as possible which is after all the whole point of the tests. I've done some tests of CCRP bombing that break some of these rules by having the player aircraft start in active pause, I configure all systems, then escape active pause with the aircraft in an autopilot mode to fly straight, the aircraft is placed roughly 10 seconds before the CCRP release point so a minimum amount of entropy is introduced by the flight model. This has worked so far without issue but I would avoid any flight model interaction if possible.
+These are the types of considerations you should make when creating your tests if you want them to work across versions and be as consistent as possible which is after all the whole point of the tests. I've done some tests of CCRP bombing that break some of these rules by having the player aircraft start in active pause, I configure all systems, then escape active pause with the aircraft in an autopilot mode to fly straight, the aircraft is placed roughly 10 seconds before the CCRP release point so a minimum amount of entropy is introduced by the flight model. This has worked so far without issue, but I would avoid any flight model interaction if possible.
 
-Once your test mission is ready play through it once and successfully satisfy the assertion (Shoot the red unit), save the track and then it can be loaded by the unit tester.
+Once your test mission is ready play through it once and successfully satisfy the assertion (Shoot the red unit), save the track, and then it can be loaded by the unit tester.
 
 ## How to create a test (Detailed)
 
@@ -54,7 +54,7 @@ Add an `OnMissionStart` trigger that runs a `Do Script File` on the `Scripts/Ini
 
 To output some debug information call `Output(string)`, this prints information in the unit tester, for example you could print out `On Shot` events to see what happened in the log
 
-To report a result use an `OnMissionEnd` trigger to call the global function `Assert(bool)`, so using just triggers you could setup:
+To report a result use an `OnMissionEnd` trigger to call the global function `Assert(bool)`, so using just triggers you could set up:
 
 ![image](https://user-images.githubusercontent.com/8382945/113410977-fd408000-93f7-11eb-8029-e9f445c4cbe9.png)
 
@@ -94,7 +94,7 @@ It also contains `DCS-LuaConnector-hook.lua` from my [DCS.Lua.Connector](https:/
 
 Remember the implications of disabling the Safe Scripting Environment:
 > This makes available some unsecure functions. 
-> Mission downloaded from server to client may contain potentialy harmful lua code that may use these functions.
+> Mission downloaded from server to client may contain potentially harmful lua code that may use these functions.
 
 Because of this I recommend only enabling the mod when testing or developing missions
 
@@ -113,44 +113,44 @@ The supported extensions are:
 
 ### 6. Observe
 
-If you want have the game render to watch what it's doing go to `Saved Games\DCS.unittest\Config\autoexec.cfg` and comment out the line like so
+If you want to have the game render to watch what it's doing go to `Saved Games\DCS.unittest\Config\autoexec.cfg` and comment out the line like so
 ```lua
 -- options.graphics.render3D = false
 ```
-Otherwise leave it set uncommented to save your power bill
+Otherwise, leave it set uncommented to save your power bill
 
 Once the script has finished you should see a lot of terminal output showing the results of each test like so:
 ![image](https://user-images.githubusercontent.com/8382945/113414119-932bd900-93ff-11eb-8aad-a445ad953112.png)
 
 ## PowerShell Parameters
-Parameter Name|Default Value|Description
---|--|--
-GamePath|`Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World\Path`|Path to the game executable e.g. `C:/DCS World/bin/dcs.exe`, overrides the one found in the registry
-TrackDirectory|Working Directory|Path to the directory containing tracks
-Include||A set of filters for what should be included from `-TrackDirectory`, for example `-Include "*.loadtest.trk"`
-Exclude||A set of filters for what should be excluded from `-TrackDirectory`, for example `-Exclude "*.regression.trk"`
-QuitDcsOnFinish|false|Sets if the tester quits DCS when tests are complete
-UpdateTracks|false|If enabled updates scripts in the track file with those from [MissionScripts/](/MissionScripts/), useful for keeping the networking scripts up to date across hundreds of track files
-Reseed|false|If enabled regenerates the tracks RNG seed, can be used for testing things with randomness like AI decision making or weapon CEP
-ReseedSeed|`[Environment]::TickCount`|Seed used for generating random seeds for track reseeding
-Headless|false|If enabled outputs TeamCity service messages
-DCSStartTimeout|360|Time in seconds the tester will wait for DCS to start before reporting a failure
-TrackLoadTimeout|240|Time in seconds the tester will wait for the track to load before reporting a failure
-TrackPingTimeout|30|Time in seconds the tester will wait between responses from the track file before reporting a failure (Detects crashes/freezes)
-MissionPlayTimeout|240|Time in seconds the tester will wait for a .miz file to call Assert(), not needed for trk files as they have a predetermined end time
-RetryLimit|2|How many times a track will be retried after a DCS failure (Crash\Fail to load\track freeze)
-RerunCount|1|How many times the track will be run, used in combination with PassMode below
-PassMode|All|Possible values:<br><b>All</b>: All runs of the test must pass for the test to report success<br><b>Majority</b>: Greater than 50% test runs must pass for the test to report success<br><b>Any</b>: At least 1 test run must pass for the test to report success<br><b>Last</b>: The result from the final test run is reported
-PassModeShortCircuit|false|If enabled prevents rerunning a test more times than needed once the PassMode has been satisfied, for example with `PassMode:All` if a single test fails no more are run and the result is reported as failed immediately, helps cut down on test execution time
-TimeAcceleration|1|Sets the time acceleration in each track to reduce runtime, if `DCS-Extensions` mod is installed [(Follow step #2)](#2-configure-a-dcs-profile-for-the-tester) this is done programatically and works with DCS in the background. If the mod is not installed this is done using AutoHotKey which focuses the DCS window then sends presses of `Ctrl + Z`. Set this to a sane number for your hardware, for complex tests above 8x on slow computers can cause track desync. This parameter overrides any time acceleration that was recorded in the track
-SetKeyDelay|0|Delay in ms between keypresses used to set DCS time acceleration when it cannot be set programatically
-InvertAssertion|false|If enabled tests for false negatives (A test reports success if nothing happened), will end the tests after 1 second and fail them if they report true
-WriteDir|DCS.unittest|Write directory to use in Saved Games
-WriteOutput|false|Writes messages output from the track beginning with `DUT_OUTPUT=` to a csv file next to the track, useful for statistics gathering
-WriteOutputSeed|false|If `-WriteOutput` is set appends a column to the CSV with the track's seed
-ClearTacview|false|Removes all files in `~\Documents\Tacview` before tests are run
-
-To override these parameters on a per test basis read: [Local track config files](#local-track-config-files)
+| Parameter Name       | Default Value              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+|----------------------|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| GamePath             |                            | Path to the game executable e.g. `C:/DCS World/bin/dcs.exe`, defaults to the one found in the registry (`Registry::HKEY_CURRENT_USER\SOFTWARE\Eagle Dynamics\DCS World\Path`)                                                                                                                                                                                                                                                                                                                                                                              |
+| TrackDirectory       | Working Directory          | Path to the directory containing tracks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Include              |                            | A set of filters for what should be included from `-TrackDirectory`, for example `-Include "*.loadtest.trk"`                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Exclude              |                            | A set of filters for what should be excluded from `-TrackDirectory`, for example `-Exclude "*.regression.trk"`                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| QuitDcsOnFinish      | false                      | Sets if the tester quits DCS when tests are complete                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| UpdateTracks         | false                      | If enabled updates scripts in the track file with those from [MissionScripts/](/MissionScripts/), useful for keeping the networking scripts up to date across hundreds of track files                                                                                                                                                                                                                                                                                                                                                                      |
+| Reseed               | false                      | If enabled regenerates the tracks RNG seed, can be used for testing things with randomness like AI decision making or weapon CEP                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ReseedSeed           | `[Environment]::TickCount` | Seed used for generating random seeds for track reseeding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Headless             | false                      | If enabled outputs TeamCity service messages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| DCSStartTimeout      | 360                        | Time in seconds the tester will wait for DCS to start before reporting a failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| TrackLoadTimeout     | 240                        | Time in seconds the tester will wait for the track to load before reporting a failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| TrackPingTimeout     | 30                         | Time in seconds the tester will wait between responses from the track file before reporting a failure (Detects crashes/freezes)                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| MissionPlayTimeout   | 240                        | Time in seconds the tester will wait for a .miz file to call Assert(), not needed for trk files as they have a predetermined end time                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| RetryLimit           | 2                          | How many times a track will be retried after a DCS failure (Crash\Fail to load\track freeze)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| RerunCount           | 1                          | How many times the track will be run, used in combination with PassMode below                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| PassMode             | All                        | Possible values:<br><b>All</b>: All runs of the test must pass for the test to report success<br><b>Majority</b>: Greater than 50% test runs must pass for the test to report success<br><b>Any</b>: At least 1 test run must pass for the test to report success<br><b>Last</b>: The result from the final test run is reported                                                                                                                                                                                                                           |
+| PassModeShortCircuit | false                      | If enabled prevents rerunning a test more times than needed once the PassMode has been satisfied, for example with `PassMode:All` if a single test fails no more are run and the result is reported as failed immediately, helps cut down on test execution time                                                                                                                                                                                                                                                                                           |
+| TimeAcceleration     | 1                          | Sets the time acceleration in each track to reduce runtime, if `DCS-Extensions` mod is installed [(Follow step #2)](#2-configure-a-dcs-profile-for-the-tester) this is done programatically and works with DCS in the background. If the mod is not installed this is done using AutoHotKey which focuses the DCS window then sends presses of `Ctrl + Z`. Set this to a sane number for your hardware, for complex tests above 8x on slow computers can cause track desync. This parameter overrides any time acceleration that was recorded in the track |
+| SetKeyDelay          | 0                          | Delay in ms between keypresses used to set DCS time acceleration when it cannot be set programatically                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| InvertAssertion      | false                      | If enabled tests for false negatives (A test reports success if nothing happened), will end the tests after 1 second and fail them if they report true                                                                                                                                                                                                                                                                                                                                                                                                     |
+| WriteDir             | DCS.unittest               | Write directory to use in Saved Games                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| WriteOutput          | false                      | Writes messages output from the track beginning with `DUT_OUTPUT=` to a csv file next to the track, useful for statistics gathering                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| WriteOutputSeed      | false                      | If `-WriteOutput` is set appends a column to the CSV with the track's seed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ClearTacview         | false                      | Removes all files in `~\Documents\Tacview` before tests are run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| DCSArgs              | --no-launcher              | Additional arguments to pass through to the DCS instance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+To override these parameters on a per-test basis read: [Local track config files](#local-track-config-files)
 
 ## CreateMissionsFromTemplates.ps1
 
@@ -205,17 +205,17 @@ In this example the RerunCount is overridden to `10` and PassMode is set to `All
 	"PassMode": "All",
 	"TimeAcceleration": null,
 	"RetryLimit": null,
-	"Reseed": null,
+	"Reseed": null
 }
 ```
-You could use something like this if you have a very long running test that you know will run stable with a high time acceleration set, or you could force it to 1x if you know the track can't handle time acceleration
+You could use something like this if you have a very long-running test that you know will run stable with a high time acceleration set, or you could force it to 1x if you know the track can't handle time acceleration
 ```json
 {
 	"RerunCount": null,
 	"PassMode": null,
 	"TimeAcceleration": 16,
 	"RetryLimit": null,
-	"Reseed": null,
+	"Reseed": null
 }
 ```
 ## FAQ

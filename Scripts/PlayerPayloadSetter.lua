@@ -84,7 +84,7 @@ function PropertySetter(payload)
     end
 end
 
-function UnitTypeSetter(unitType)
+function UnitTypeSetter(unitType, options)
     for coalitionName, coalition in pairs(mission.coalition) do
         for _, country in ipairs(coalition.country) do
             if country.helicopter ~= nil then
@@ -94,6 +94,9 @@ function UnitTypeSetter(unitType)
                         for _, unit in ipairs(group.units) do
                             if unit.skill == "Player" then
                                 unit.type = unitType
+                                if options ~= nil then
+                                    unit.livery_id = options.livery
+                                end
                             end
                         end
                     end
@@ -106,6 +109,9 @@ function UnitTypeSetter(unitType)
                         for _, unit in ipairs(group.units) do
                             if unit.skill == "Player" then
                                 unit.type = unitType
+                                if options ~= nil then
+                                    unit.livery_id = options.livery
+                                end
                             end
                         end
                     end
@@ -145,9 +151,9 @@ for _, file in pairs(missionEditor.recursiveDir(searchDirectory, nil, false)) do
         end
         tempDir = missionEditor.Open(file)
         for k,v in pairs(types) do
-            UnitTypeSetter(v)
+            UnitTypeSetter(k, v)
             MissionEditor.SerializeTo(tempDir, 'mission', mission)
-            local newFileName = v..".loadtest.trk"
+            local newFileName = k..".loadtest.trk"
             MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
         end
         missionEditor.Clean(tempDir)
@@ -159,9 +165,9 @@ for _, file in pairs(missionEditor.recursiveDir(searchDirectory, nil, false)) do
         end
         tempDir = missionEditor.Open(file)
         for k,v in pairs(types) do
-            UnitTypeSetter(v)
+            UnitTypeSetter(k, v)
             MissionEditor.SerializeTo(tempDir, 'mission', mission)
-            local newFileName = v..".loadtest.trk"
+            local newFileName = k..".loadtest.trk"
             MissionEditor.SaveAs(parentPath..'/'..newFileName, tempDir)
         end
         missionEditor.Clean(tempDir)

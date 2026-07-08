@@ -4,8 +4,9 @@ package.path  = package.path..";.\\LuaSocket\\?.lua"
 package.cpath = package.cpath..";.\\LuaSocket\\?.dll"
 socket = require("socket")
 ]]
+local port = 1337;
 if socket ~= nil then
-    local connection = socket.connect("localhost", 1337)
+    local connection = socket.connect("localhost", port)
     local dutExportSocket
     if connection ~= nil then
         dutExportSocket = socket.try(connection)

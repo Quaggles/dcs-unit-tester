@@ -3,9 +3,12 @@ param (
     [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
     [System.IO.FileInfo]
     $Archive,
-    [Parameter(Mandatory = $true)]
+    [Parameter()]
     [System.IO.FileInfo]
     $SourceFile,
+    [Parameter()]
+    [string]
+    $Content,
     [Parameter(Mandatory = $true)]
     [string]
     $Destination,
@@ -44,12 +47,18 @@ BEGIN {
 }
 PROCESS {
     $relativeArchivePath = (Get-Item $Archive).Name
-    $newContent = $null
-    if ($CheckContent) {
+    # Checking $PSBoundParameters allows empty strings to be passed to Content
+    if (-not $PSBoundParameters.ContainsKey('Content') -and -not $SourceFile){
+        throw "Either -Content or -SourceFile must be passed"
+    } elseif ($PSBoundParameters.ContainsKey('Content')){
+        $newContent = $Content
+    } elseif ($SourceFile) {
         $newContentReader = [System.IO.StreamReader]::new($SourceFile.FullName)
         $newContent = Using-Object ($newContentReader) {
             return $newContentReader.ReadToEnd();
         }
+    }
+    if ($CheckContent) {
         $oldContent = .$PSScriptRoot/Get-ArchiveEntry.ps1 -Path $Archive -EntryPath $Destination
         if ($null -eq $oldContent -or [string]::Equals($newContent, $oldContent)) {
             Write-Host """$relativeArchivePath"" => ""$Destination"" - Entry matched content, skipping..."
@@ -64,12 +73,6 @@ PROCESS {
                 $entry = $zip.CreateEntry($Destination);
                 # Zip Epoch is 1980 vs Unix 1970
                 $entry.LastWriteTime = ([System.DateTimeOffset]::UnixEpoch).AddYears(10)
-                if ($null -eq $newContent) {                    
-                    $newContentReader = [System.IO.StreamReader]::new($SourceFile.FullName)
-                    $newContent = Using-Object ($newContentReader) {
-                        return $newContentReader.ReadToEnd();
-                    }
-                }
                 $stream = $entry.Open()
                 $stream = [System.IO.StreamWriter]$stream
                 Using-Object ($stream) {

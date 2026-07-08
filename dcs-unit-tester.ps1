@@ -29,7 +29,9 @@ param (
 	[switch] $WriteOutput,
 	[switch] $WriteOutputSeed,
 	[switch] $ClearTacview,
-	[string[]] $DCSArgs = "--no-launcher"
+	[string[]] $DCSArgs = "--no-launcher",
+	[int]$MissionPort = 1337,
+	[Boolean]$AllowMissionPortReassignment=$true
 )
 
 function Write-HostAnsi {
@@ -89,6 +91,10 @@ $connector.Timeout = [TimeSpan]::FromSeconds(5)
 $tempArtifacts = @()
 $tempTracks = @()
 $invalidChars = [System.IO.Path]::GetInvalidFileNameChars()
+
+# Cache mission scripts
+$onMissionEndScript = Get-Content -Path "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Raw
+$initialiseNetworkingScript = Get-Content -Path "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Raw
 
 if ($null -eq $WriteDir) {
 	$WriteDir = "DCS"
@@ -604,9 +610,34 @@ return dcs_extensions ~= nil
 		if ($UpdateTracks -and ($skipped -eq $false)) {
 			# Update scripts in the mission incase the source scripts updated
 			if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
-			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\OnMissionEnd.lua" -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -Content $onMissionEndScript -Destination "l10n/DEFAULT/OnMissionEnd.lua"
+			$missionPortLocal = $MissionPort
+			if (-not $AllowMissionPortReassignment){
+				if ([bool](Get-NetTCPConnection -LocalPort $missionPortLocal)) {
+					throw "Port $MissionPort is already in use, cannot start"
+				}
+			} else {
+				$i = 0
+				$iLimit = 1000
+				$dynamicMissionPortBase = 25000
+				while ([bool](Get-NetTCPConnection -LocalPort $missionPortLocal -ErrorAction SilentlyContinue)) {
+					$missionPortLocal = $dynamicMissionPortBase + $i
+					$i++
+					if ($i -gt $iLimit) {
+						throw "Could not find a free port for MissionPort between $($dynamicMissionPortBase) and $($dynamicMissionPortBase + $iLimit)"
+					}
+				}
+				if ($MissionPort -ne $missionPortLocal) {
+					Write-Host "`t`tℹ️ Mission TCP Port $MissionPort was not free, using port $($missionPortLocal) in InitialiseNetworking.lua"
+				}
+			}
+			$initialiseNetworkingScriptContent = $initialiseNetworkingScript
+			# Script already uses 1337 so only replace if it differs
+			if ($missionPortLocal -ne 1337) {
+				$initialiseNetworkingScriptContent = $initialiseNetworkingScript.Replace("local port = 1337;", "local port = $missionPortLocal;")
+			}
 			if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
-			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile "$PSScriptRoot\MissionScripts\InitialiseNetworking.lua" -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
+			.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -Content $initialiseNetworkingScriptContent -Destination "l10n/DEFAULT/InitialiseNetworking.lua"
 		}
 
 		# Track retry loop
@@ -643,17 +674,11 @@ return dcs_extensions ~= nil
 
 				# Update track seed in the mission to make it random
 				if ($localReseed -and $isTrack) {
-					$temp = New-TemporaryFile
-					try {
-						$oldSeed = (GetSeed -Path $_.FullName)
-						$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
-						Set-Content -Path $temp -Value $randomSeed
-						Write-HostAnsi "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
-						if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
-						.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -SourceFile $temp -Destination "track_data/seed"
-					} finally {
-						Remove-Item -Path $temp -ErrorAction SilentlyContinue
-					}
+					$oldSeed = (GetSeed -Path $_.FullName)
+					$randomSeed = Get-Random -Minimum 0 -Maximum 1000000
+					Write-HostAnsi "`t`tℹ️ Randomising $testType seed, Old: $oldSeed, New: $randomSeed"
+					if (!$Headless) { Write-HostAnsi "`t`tℹ️ " -NoNewline }
+					.$PSScriptRoot/Set-ArchiveEntry.ps1 -Archive $tempTrackPath -Content $randomSeed -Destination "track_data/seed"
 				}
 
 				try {
@@ -666,7 +691,7 @@ return dcs_extensions ~= nil
 					Write-HostAnsi "`t`t✅ Commanding DCS to load $testType" -F Green
 					LoadTrack -TrackPath $tempTrackPath -Multiplayer:$isMultiplayer
 					# Set up endpoint and start listening
-					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any,1337) 
+					$endpoint = new-object System.Net.IPEndPoint([ipaddress]::any, $missionPortLocal) 
 					$listener = new-object System.Net.Sockets.TcpListener $EndPoint
 					$listener.start()
 				
